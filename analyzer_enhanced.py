@@ -11,57 +11,73 @@ class EnhancedTweetAnalyzer(TweetAnalyzer):
     def __init__(self, batch_size=25, max_retries=3):
         super().__init__(batch_size, max_retries)
         self.llm_client = boto3.client('bedrock-runtime', region_name='us-east-1')
-        self.model_name = "anthropic.claude-3-haiku-20240307-v1:0"
+        self.model_name = os.getenv('MODEL_NAME', "anthropic.claude-3-haiku-20240307-v1:0")
 
-    def _create_enhanced_prompt(self, tweets_data: str, username: str) -> str:
-        """Create prompt for the additional ratios analysis"""
-        return f"""Analyze these tweets from @{username} focusing on specific ratios.
-        
-        TWEETS DATA:
-        {tweets_data}
-        
-        Provide scores for these specific aspects in JSON format:
-        {{
-            "judicial_security_ratio": {{
-                "score": number between -100 and +100,
-                "explanation": "Brief explanation of the score (max 25 words)",
-                "confidence": number between 0 and 100
-            }},
-            "rights_security_balance": {{
-                "score": number between 0 and 100,
-                "explanation": "Brief explanation of the score (max 25 words)",
-                "confidence": number between 0 and 100
-            }},
-            "emergency_powers_position": {{
-                "score": number between 1 and 10,
-                "explanation": "Brief explanation of the score (max 25 words)",
-                "confidence": number between 0 and 100
-            }},
-            "domestic_international_ratio": {{
-                "score": number between -100 and +100,
-                "explanation": "Brief explanation of the score (max 25 words)",
-                "confidence": number between 0 and 100
-            }}
-        }}
-        
-        SCORING GUIDELINES:
-        1. Judicial-Security Ratio:
-           - -100: Purely judicial reform focused
-           - +100: Purely security focused
-           
-        2. Rights-Security Balance:
-           - 0: Pure individual rights focus
-           - 100: Pure collective security focus
-           
-        3. Emergency Powers:
-           - 1: Minimal executive powers advocated
-           - 10: Maximum executive powers advocated
-           
-        4. Domestic-International:
-           - -100%: Purely domestic focus
-           - +100%: Purely international focus
-        
-        Base your analysis on actual content and keep explanations under 25 words."""
+    def _create_enhanced_prompt(self, tweets_batch):
+        """Create a prompt for enhanced analysis focusing on specific ratios."""
+        prompt = f"""Analyze these tweets and provide scores and explanations for the following metrics. 
+All scores should be on a scale of 0-100:
+
+1. Judicial-Security Ratio (0-100):
+   - 0: Exclusively focused on security matters
+   - 25: Strong emphasis on security with some judicial reform mentions
+   - 50: Balanced discussion of both judicial reform and security
+   - 75: Strong emphasis on judicial reform with some security mentions
+   - 100: Exclusively focused on judicial reform
+
+2. Rights-Security Balance (0-100):
+   - 0: Exclusively prioritizes security over rights
+   - 25: Strongly favors security with some consideration for rights
+   - 50: Balanced consideration of both rights and security
+   - 75: Strongly favors rights with some security considerations
+   - 100: Exclusively prioritizes rights over security
+
+3. Emergency Powers Position (0-100):
+   - 0: Strongly opposes emergency powers
+   - 25: Generally critical of emergency powers
+   - 50: Neutral or balanced view on emergency powers
+   - 75: Generally supportive of emergency powers
+   - 100: Strongly advocates for emergency powers
+
+4. Domestic-International Ratio (0-100):
+   - 0: Exclusively focused on international matters
+   - 25: Primarily international with some domestic context
+   - 50: Equal focus on domestic and international issues
+   - 75: Primarily domestic with some international context
+   - 100: Exclusively focused on domestic matters
+
+For each metric, provide:
+1. A score (0-100)
+2. A brief explanation (max 25 words)
+3. A confidence rating (0-100)
+
+Tweets to analyze:
+{tweets_batch}
+
+Respond in this JSON format:
+{{
+    "judicial_security_ratio": {{
+        "score": <0-100>,
+        "explanation": "brief explanation",
+        "confidence": <0-100>
+    }},
+    "rights_security_balance": {{
+        "score": <0-100>,
+        "explanation": "brief explanation",
+        "confidence": <0-100>
+    }},
+    "emergency_powers_position": {{
+        "score": <0-100>,
+        "explanation": "brief explanation",
+        "confidence": <0-100>
+    }},
+    "domestic_international_ratio": {{
+        "score": <0-100>,
+        "explanation": "brief explanation",
+        "confidence": <0-100>
+    }}
+}}"""
+        return prompt
 
     def analyze_enhanced_metrics(self, tweets: List[Dict], username: str) -> List[Dict]:
         """Perform the enhanced analysis for additional ratios in batches"""
@@ -85,7 +101,7 @@ class EnhancedTweetAnalyzer(TweetAnalyzer):
                 tweet_text = tweet.get('text', tweet.get('tweet_text', ''))
                 formatted_data += f"Text: {tweet_text}\n\n"
             
-            prompt = self._create_enhanced_prompt(formatted_data, username)
+            prompt = self._create_enhanced_prompt(formatted_data)
             
             try:
                 # Make API call using AWS Bedrock

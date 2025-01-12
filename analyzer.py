@@ -14,6 +14,8 @@ class TweetAnalyzer:
         self.batch_size = batch_size
         self.max_retries = max_retries
         self.llm_client = self._init_llm_client()
+        # Get model from environment or use default
+        self.model_name = os.getenv('MODEL_NAME', "anthropic.claude-3-haiku-20240307-v1:0")
         
     def _init_llm_client(self):
         """Initialize AWS Bedrock client with timeouts and retries"""
@@ -283,7 +285,7 @@ class TweetAnalyzer:
                         "messages": [{"role": "user", "content": prompt}],
                         "temperature": 0.1
                     }),
-                    modelId="anthropic.claude-3-haiku-20240307-v1:0",
+                    modelId=self.model_name,  # Use the model from config
                     accept='application/json',
                     contentType='application/json'
                 )
@@ -888,3 +890,60 @@ class TweetAnalyzer:
         else:
             print("Failed to generate period comparison due to missing analysis")
             return pd.DataFrame() 
+
+    def _create_analysis_prompt(self, tweets_batch):
+        """Create a prompt for basic tweet analysis."""
+        prompt = f"""Analyze these tweets and provide scores and explanations for the following metrics.
+All scores should be on a scale of 0-100:
+
+1. Toxicity Level (0-100):
+   - 0: Not toxic at all
+   - 25: Mildly toxic
+   - 50: Moderately toxic
+   - 75: Very toxic
+   - 100: Extremely toxic
+
+2. Emotional Tones (select all that apply):
+   - angry
+   - frustrated
+   - supportive
+   - optimistic
+   - concerned
+   - critical
+   - neutral
+   - cynical
+
+For each metric, provide:
+1. A score (0-100) for toxicity
+2. Examples of toxic tweets (if any)
+3. List of emotional tones
+4. A confidence rating (0-100)
+
+Also identify:
+1. Main narratives being promoted
+2. Entities being criticized (attacked_entities)
+3. Entities being defended (protected_entities)
+4. Stated goals or objectives
+5. Brief psychological profile (max 25 words)
+
+Tweets to analyze:
+{tweets_batch}
+
+Respond in this JSON format:
+{{
+    "toxicity_level": <0-100>,
+    "toxic_examples": ["example1", "example2"],
+    "emotional_tones": ["tone1", "tone2"],
+    "narratives": ["narrative1", "narrative2"],
+    "attacked_entities": ["entity1", "entity2"],
+    "protected_entities": ["entity1", "entity2"],
+    "stated_goals": ["goal1", "goal2"],
+    "psychological_profile": "brief profile",
+    "confidence_ratings": {{
+        "narratives_confidence": <0-100>,
+        "entities_confidence": <0-100>,
+        "toxicity_confidence": <0-100>
+    }},
+    "confidence_explanation": ["reason1", "reason2"]
+}}"""
+        return prompt 

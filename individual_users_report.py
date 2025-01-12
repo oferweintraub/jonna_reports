@@ -5,36 +5,47 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from IPython.display import display, Markdown
 import numpy as np
+import json
+import boto3
 
 class UserAnalysisReport:
     def __init__(self):
-        # Set basic style for seaborn
+        # Set seaborn style
         sns.set_theme()
+        # Additional matplotlib customization
+        plt.rcParams['figure.figsize'] = [12, 10]
+        plt.rcParams['axes.titlesize'] = 14
+        plt.rcParams['axes.labelsize'] = 12
         
-    def generate_report(self, period_results, test_users, batch_size=80):
-        """
-        Generate a comprehensive analysis report for users across different periods.
+        # Initialize AWS Bedrock client
+        self.llm_client = boto3.client(
+            service_name='bedrock-runtime',
+            region_name='us-east-1'
+        )
         
-        Args:
-            period_results (dict): Dictionary containing DataFrames with analysis results for each period
-            test_users (list): List of usernames to analyze
-            batch_size (int): Size of tweet batches used in analysis (not used after merging)
-        """
-        # Create the report
+    def generate_report(self, period_results, test_users):
+        """Generate the analysis report."""
         report = []
-        report.append("# Cross-Period Analysis Report\n")
-        report.append("## Overview\n")
-        report.append(f"Analysis period: Pre-war vs Post-war\n")
-        report.append(f"Users analyzed: {', '.join(test_users)}\n")
-
-        # Ensure the user_analysis directory exists
-        os.makedirs('data/user_analysis', exist_ok=True)
-
-        # Generate visualizations
-        viz_path = self._generate_visualizations(period_results, test_users)
         
-        # Generate detailed user analysis
-        self._add_user_analysis(report, period_results, test_users)
+        # Get the period dates from the data
+        pre_war_data = period_results['pre_war'].iloc[0]
+        post_war_data = period_results['post_war'].iloc[0]
+        
+        # Add title with actual dates
+        report.append("# Pre/Post War Analysis - Key Findings\n")
+        report.append(f"*Comparing Pre-war (2023-07-09 to 2023-10-07) to Post-war (2024-10-01 to 2024-12-30)*\n\n")
+        
+        # Ensure output directory exists
+        os.makedirs('data/user_analysis', exist_ok=True)
+        
+        # Generate focused visualizations for all users first
+        viz_paths_by_user = {}
+        for username in test_users:
+            viz_path = self._generate_key_visualizations(period_results, [username])
+            viz_paths_by_user[username] = viz_path[0]  # Store path for each user
+        
+        # Now generate the analysis for each user
+        self._add_focused_user_analysis(report, period_results, test_users, viz_paths_by_user)
         
         # Save and display report
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -42,145 +53,436 @@ class UserAnalysisReport:
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(report))
         
-        # Display the report in the notebook
         display(Markdown('\n'.join(report)))
-        
-        print(f"\nReport and visualizations saved to:")
-        print(f"- Report: {report_path}")
-        print(f"- Visualizations: {viz_path}")
-        
-        return report_path, viz_path
+        return report_path, list(viz_paths_by_user.values())
 
-    def _generate_visualizations(self, period_results, test_users):
-        """Generate and save visualization plots."""
-        plt.figure(figsize=(15, 10))
+    def _normalize_score(self, score, metric):
+        """Normalize a score to 0-100 scale based on the metric type."""
+        # Define expected ranges for each metric
+        ranges = {
+            'judicial_security_ratio_score': (-100, 100),  # -100 (full security) to +100 (full judicial)
+            'rights_security_balance_score': (-100, 100),  # -100 (full security) to +100 (full rights)
+            'emergency_powers_position_score': (-100, 100),  # -100 (against) to +100 (for)
+            'domestic_international_ratio_score': (-100, 100)  # -100 (international) to +100 (domestic)
+        }
         
-        # 1. Toxicity Level Comparison
-        plt.subplot(2, 2, 1)
-        toxicity_data = []
-        for period, df in period_results.items():
-            for username in test_users:
-                user_data = df[df['username'] == username]
-                if not user_data.empty:
-                    toxicity_data.append({
-                        'Username': username,
-                        'Period': period.replace('_', ' ').title(),
-                        'Toxicity': user_data['toxicity_level'].mean()
-                    })
+        if metric not in ranges:
+            return score
         
-        toxicity_df = pd.DataFrame(toxicity_data)
-        sns.barplot(data=toxicity_df, x='Username', y='Toxicity', hue='Period')
-        plt.title('Average Toxicity Levels by Period')
-        plt.xticks(rotation=45)
-        
-        # 2. Tweet Volume Comparison (using tweet_count if available, otherwise just showing 1 per analysis)
-        plt.subplot(2, 2, 2)
-        volume_data = []
-        for period, df in period_results.items():
-            for username in test_users:
-                user_data = df[df['username'] == username]
-                if not user_data.empty:
-                    # Use tweet_count if available, otherwise count rows
-                    tweet_count = user_data['tweet_count'].iloc[0] if 'tweet_count' in user_data.columns else len(user_data)
-                    volume_data.append({
-                        'Username': username,
-                        'Period': period.replace('_', ' ').title(),
-                        'Tweets': tweet_count
-                    })
-        
-        volume_df = pd.DataFrame(volume_data)
-        sns.barplot(data=volume_df, x='Username', y='Tweets', hue='Period')
-        plt.title('Number of Tweets by Period')
-        plt.xticks(rotation=45)
-        
-        # Adjust layout and save
-        plt.tight_layout()
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        viz_path = os.path.join('data', 'user_analysis', f'analysis_visualization_{timestamp}.png')
-        plt.savefig(viz_path, dpi=300, bbox_inches='tight')
-        
-        return viz_path
+        min_val, max_val = ranges[metric]
+        normalized = ((score - min_val) / (max_val - min_val)) * 100
+        return max(0, min(100, normalized))  # Ensure result is between 0 and 100
 
-    def _add_user_analysis(self, report, period_results, test_users):
-        """Add detailed analysis for each user to the report."""
-        report.append("\n## Detailed Analysis by User\n")
+    def _generate_key_visualizations(self, period_results, test_users):
+        """Generate focused visualizations highlighting key changes."""
+        metrics = {
+            'judicial_security_ratio_score': {
+                'name': 'Judicial-Security Balance'
+            },
+            'rights_security_balance_score': {
+                'name': 'Rights-Security Balance'
+            },
+            'emergency_powers_position_score': {
+                'name': 'Emergency Powers Position'
+            },
+            'domestic_international_ratio_score': {
+                'name': 'Domestic-International Focus'
+            }
+        }
+        
+        # Define consistent colors
+        PRE_WAR_COLOR = '#1f77b4'  # blue
+        POST_WAR_COLOR = '#ff7f0e'  # orange
+        
+        viz_paths = []
         
         for username in test_users:
-            report.append(f"\n### {username}\n")
+            # Create a figure with 4 subplots
+            fig, axes = plt.subplots(2, 2, figsize=(20, 16))
+            fig.suptitle(f'Analysis Summary for {username}', fontsize=16, y=1.02)
             
-            # Toxicity analysis
-            pre_war_tox = period_results['pre_war'][period_results['pre_war']['username'] == username]['toxicity_level'].mean()
-            post_war_tox = period_results['post_war'][period_results['post_war']['username'] == username]['toxicity_level'].mean()
-            tox_change = post_war_tox - pre_war_tox
+            # Get user data
+            pre_data = period_results['pre_war'][period_results['pre_war']['username'] == username].iloc[0]
+            post_data = period_results['post_war'][period_results['post_war']['username'] == username].iloc[0]
             
-            report.append("#### Toxicity Analysis\n")
-            report.append(f"- Pre-war average toxicity: {pre_war_tox:.2f}\n")
-            report.append(f"- Post-war average toxicity: {post_war_tox:.2f}\n")
-            report.append(f"- Change in toxicity: {tox_change:+.2f}\n")
+            # 1. All Metrics Comparison - Line Chart (top left)
+            ax = axes[0, 0]
             
-            # Most toxic tweets analysis
-            report.append("\n#### Most Toxic Tweets\n")
-            for period in ['pre_war', 'post_war']:
-                period_display = period.replace('_', ' ').title()
-                user_data = period_results[period][period_results[period]['username'] == username]
+            # Prepare data for all metrics
+            metric_values = {
+                'Pre-war': [float(pre_data[m]) for m in metrics.keys()],
+                'Post-war': [float(post_data[m]) for m in metrics.keys()]
+            }
+            
+            # Create clearer labels for metrics
+            metric_labels = [info['name'] for info in metrics.values()]
+            x = range(len(metrics))
+            
+            # Plot with larger markers and thicker lines
+            ax.plot(x, metric_values['Pre-war'], 'o-', label='Pre-war', 
+                   markersize=10, linewidth=2, color=PRE_WAR_COLOR)
+            ax.plot(x, metric_values['Post-war'], 's-', label='Post-war', 
+                   markersize=10, linewidth=2, color=POST_WAR_COLOR)
+            
+            # Customize chart
+            ax.set_xticks(x)
+            ax.set_xticklabels(metric_labels, rotation=45, ha='right')
+            ax.legend(loc='upper right')
+            ax.grid(True, linestyle='--', alpha=0.7)
+            
+            # Add value labels on the points
+            for i, (pre_val, post_val) in enumerate(zip(metric_values['Pre-war'], metric_values['Post-war'])):
+                ax.annotate(f'{pre_val:.1f}', (i, pre_val), textcoords="offset points", 
+                          xytext=(0,10), ha='center', fontsize=10)
+                ax.annotate(f'{post_val:.1f}', (i, post_val), textcoords="offset points", 
+                          xytext=(0,-15), ha='center', fontsize=10)
+                # Add change label in the middle
+                change = post_val - pre_val
+                if abs(change) >= 6.0:  # Only show significant changes
+                    ax.annotate(f'{change:+.1f}', (i, (pre_val + post_val)/2), textcoords="offset points",
+                              xytext=(20,0), ha='left', fontsize=10, fontweight='bold')
+            
+            ax.set_title('All Metrics Comparison')
+            ax.set_ylabel('Score')
+            ax.set_ylim(-5, 105)
+            
+            # 2. Significant Changes - Bar Chart (top right)
+            ax = axes[0, 1]
+            
+            # Calculate changes and filter significant metrics
+            significant_metrics = []
+            for metric_key, metric_info in metrics.items():
+                pre_val = float(pre_data[metric_key])
+                post_val = float(post_data[metric_key])
+                change = abs(post_val - pre_val)
+                if change >= 6.0:  # Show metrics with changes >= 6.0 points
+                    significant_metrics.append({
+                        'key': metric_key,
+                        'name': metric_info['name'],
+                        'pre': pre_val,
+                        'post': post_val,
+                        'change': post_val - pre_val
+                    })
+            
+            # Sort by absolute change magnitude
+            significant_metrics.sort(key=lambda x: abs(x['change']), reverse=True)
+            
+            if significant_metrics:
+                # Set up positions for grouped bars
+                x = np.arange(len(significant_metrics))
+                width = 0.35
                 
-                if not user_data.empty:
-                    toxic_tweets = user_data.nlargest(2, 'toxicity_level')
-                    report.append(f"\n**{period_display} Period Most Toxic Tweets:**\n")
-                    for idx, (_, tweet) in enumerate(toxic_tweets.iterrows(), 1):
-                        report.append(f"\n{idx}. **Toxicity Level: {tweet['toxicity_level']:.2f}**\n")
-                        if 'tweet_text' in tweet:
-                            report.append(f"   Tweet: {tweet['tweet_text']}\n")
-                        if 'toxic_examples' in tweet and isinstance(tweet['toxic_examples'], str):
-                            examples = eval(tweet['toxic_examples'])
-                            if examples:
-                                report.append(f"   Examples: {examples[0]}\n")
-                        report.append("\n")  # Add space between tweets
+                # Create bars
+                bars1 = ax.bar(x - width/2, [m['pre'] for m in significant_metrics], width, 
+                             label='Pre-war', color=PRE_WAR_COLOR)
+                bars2 = ax.bar(x + width/2, [m['post'] for m in significant_metrics], width,
+                             label='Post-war', color=POST_WAR_COLOR)
+                
+                # Customize chart
+                ax.set_xticks(x)
+                ax.set_xticklabels([m['name'] for m in significant_metrics], 
+                                 rotation=45, ha='right')
+                ax.legend()
+                ax.grid(True, linestyle='--', alpha=0.7)
+                
+                # Add value labels on bars
+                for i, metrics in enumerate(significant_metrics):
+                    ax.text(i - width/2, metrics['pre'], f"{metrics['pre']:.1f}", 
+                           ha='center', va='bottom')
+                    ax.text(i + width/2, metrics['post'], f"{metrics['post']:.1f}", 
+                           ha='center', va='bottom')
+                    # Add change label in the middle
+                    ax.text(i, max(metrics['pre'], metrics['post']) + 5,
+                           f"{metrics['change']:+.1f}", ha='center', va='bottom',
+                           fontweight='bold', color='black')
+                
+                ax.set_title('Significant Changes (≥6.0 points)')
+                ax.set_ylabel('Score')
+                ax.set_ylim(-5, 105)
+            else:
+                ax.text(0.5, 0.5, 'No significant changes\n(≥6.0 points)',
+                       ha='center', va='center', transform=ax.transAxes)
+                ax.set_title('Significant Changes')
             
-            # Volume analysis
-            pre_war_data = period_results['pre_war'][period_results['pre_war']['username'] == username]
-            post_war_data = period_results['post_war'][period_results['post_war']['username'] == username]
+            # 3. Toxicity Level Changes - Bar Chart (bottom left)
+            ax = axes[1, 0]
+            toxicity_data = {
+                'Pre-war': float(pre_data['toxicity_level']),
+                'Post-war': float(post_data['toxicity_level'])
+            }
+            bars = ax.bar(['Pre-war', 'Post-war'], toxicity_data.values())
+            bars[0].set_color(PRE_WAR_COLOR)
+            bars[1].set_color(POST_WAR_COLOR)
             
-            # Get total tweets analyzed from the original data
-            pre_war_tweets = pre_war_data['num_tweets'].iloc[0] if 'num_tweets' in pre_war_data.columns else pre_war_data['tweet_count'].iloc[0]
-            post_war_tweets = post_war_data['num_tweets'].iloc[0] if 'num_tweets' in post_war_data.columns else post_war_data['tweet_count'].iloc[0]
+            # Add value labels
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{height:.1f}',
+                       ha='center', va='bottom')
             
-            report.append("\n#### Tweet Volume Analysis\n")
-            report.append(f"- Pre-war tweets analyzed: {int(pre_war_tweets):,}\n")  # Format with commas for readability
-            report.append(f"- Post-war tweets analyzed: {int(post_war_tweets):,}\n")
-            report.append(f"- Total tweets analyzed: {int(pre_war_tweets + post_war_tweets):,}\n")
+            # Add change label
+            change = toxicity_data['Post-war'] - toxicity_data['Pre-war']
+            ax.text(0.5, max(toxicity_data.values()) + 5,
+                   f"{change:+.1f}", ha='center', va='bottom',
+                   fontweight='bold', color='black')
             
-            # Narrative analysis
-            self._add_narrative_analysis(report, period_results, username)
+            ax.set_title('Toxicity Level Changes')
+            ax.set_ylim(0, 100)
+            ax.grid(True, linestyle='--', alpha=0.7)
+            
+            # 4. Tweet Volume Comparison - Bar Chart (bottom right)
+            ax = axes[1, 1]
+            volume_pre = len(eval(pre_data['toxic_examples'])) if isinstance(pre_data['toxic_examples'], str) else len(pre_data['toxic_examples'])
+            volume_post = len(eval(post_data['toxic_examples'])) if isinstance(post_data['toxic_examples'], str) else len(post_data['toxic_examples'])
+            
+            bars = ax.bar(['Pre-war', 'Post-war'], [volume_pre, volume_post])
+            bars[0].set_color(PRE_WAR_COLOR)
+            bars[1].set_color(POST_WAR_COLOR)
+            
+            # Add value labels
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{int(height)}',
+                       ha='center', va='bottom')
+            
+            # Add change label
+            change = volume_post - volume_pre
+            ax.text(0.5, max(volume_pre, volume_post) + 1,
+                   f"{change:+d}", ha='center', va='bottom',
+                   fontweight='bold', color='black')
+            
+            ax.set_title('Tweet Volume')
+            ax.grid(True, linestyle='--', alpha=0.7)
+            
+            # Adjust layout and save
+            plt.tight_layout()
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            viz_path = os.path.join('data', 'user_analysis', f'analysis_{username}_{timestamp}.png')
+            plt.savefig(viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            viz_paths.append(viz_path)
+        
+        return viz_paths
 
-    def _add_narrative_analysis(self, report, period_results, username):
-        """Add narrative analysis for a user to the report."""
-        report.append("\n#### Narrative Analysis\n")
-        for period in ['pre_war', 'post_war']:
-            period_display = period.replace('_', ' ').title()
-            user_data = period_results[period][period_results[period]['username'] == username]
+    def _get_toxic_tweets(self, data):
+        """Extract the 2 most toxic tweets from the data."""
+        try:
+            if isinstance(data['toxic_examples'], str):
+                # Handle potential truncation in the string representation
+                toxic_tweets = eval(data['toxic_examples'].replace('...', ''))
+            else:
+                toxic_tweets = data['toxic_examples']
             
-            report.append(f"\n**{period_display} Period:**\n")
+            # Ensure we have full tweets
+            if toxic_tweets and isinstance(toxic_tweets, list):
+                # Filter out any obviously truncated tweets (ending with ...)
+                full_tweets = [tweet for tweet in toxic_tweets if not tweet.endswith('...')]
+                return full_tweets[:2] if full_tweets else []
+            return []
+        except Exception as e:
+            print(f"Error processing toxic tweets: {e}")
+            return []
+
+    def _add_focused_user_analysis(self, report, period_results, test_users, viz_paths_by_user):
+        """Add focused analysis highlighting significant changes for each user."""
+        for username in test_users:
+            report.append(f"\n## {username} - Key Changes\n")
             
-            if not user_data.empty:
-                narratives = user_data['narratives'].iloc[0]
-                attacked = user_data['attacked_entities'].iloc[0]
-                protected = user_data['protected_entities'].iloc[0]
+            pre_data = period_results['pre_war'][period_results['pre_war']['username'] == username].iloc[0]
+            post_data = period_results['post_war'][period_results['post_war']['username'] == username].iloc[0]
+            
+            # Add toxic tweets section
+            report.append("\n### Most Toxic Tweets\n")
+            
+            # Pre-war toxic tweets
+            report.append("\n**Pre-war Period:**\n")
+            pre_toxic = self._get_toxic_tweets(pre_data)
+            if pre_toxic:
+                for tweet in pre_toxic:
+                    report.append(f"```\n{tweet}\n```\n")
+            else:
+                report.append("*No toxic tweets found*\n")
+            
+            # Post-war toxic tweets
+            report.append("\n**Post-war Period:**\n")
+            post_toxic = self._get_toxic_tweets(post_data)
+            if post_toxic:
+                for tweet in post_toxic:
+                    report.append(f"```\n{tweet}\n```\n")
+            else:
+                report.append("*No toxic tweets found*\n")
+            
+            # Add metrics analysis
+            self._add_metrics_analysis(report, pre_data, post_data)
+            
+            # Add narrative analysis
+            self._add_narrative_analysis(report, pre_data, post_data)
+            
+            # Add entity changes
+            self._add_entity_changes(report, pre_data, post_data)
+            
+            # Add visualizations at the end of each user's section
+            report.append("\n### Visualizations\n")
+            report.append(f"![Analysis Summary for {username}]({viz_paths_by_user[username]})\n\n")
+            report.append("---\n")  # Add separator between users
+
+    def _add_metrics_analysis(self, report, pre_data, post_data):
+        """Add metrics analysis to the report."""
+        metrics = {
+            'judicial_security_ratio_score': {
+                'name': 'Judicial-Security Balance',
+                'scale': '(0 represents exclusive focus on security measures, while 100 represents exclusive focus on judicial reforms)',
+                'explanation': {
+                    'positive': 'More focus on judicial reform relative to security',
+                    'negative': 'More focus on security relative to judicial reform',
+                    'zero': 'Equal focus on judicial reform and security'
+                }
+            },
+            'rights_security_balance_score': {
+                'name': 'Rights-Security Balance',
+                'scale': '(0 represents exclusive focus on security measures, while 100 represents exclusive focus on citizen rights)',
+                'explanation': {
+                    'positive': 'More emphasis on rights relative to security',
+                    'negative': 'More emphasis on security relative to rights',
+                    'zero': 'Equal emphasis on rights and security'
+                }
+            },
+            'emergency_powers_position_score': {
+                'name': 'Emergency Powers Position',
+                'scale': '(0 represents complete opposition to emergency powers, while 100 represents full support)',
+                'explanation': {
+                    'positive': 'More supportive of emergency powers',
+                    'negative': 'More critical of emergency powers',
+                    'zero': 'Neutral stance on emergency powers'
+                }
+            },
+            'domestic_international_ratio_score': {
+                'name': 'Domestic-International Focus',
+                'scale': '(0 represents exclusive focus on international issues, while 100 represents exclusive focus on domestic issues)',
+                'explanation': {
+                    'positive': 'More focus on domestic issues',
+                    'negative': 'More focus on international issues',
+                    'zero': 'Equal focus on domestic and international issues'
+                }
+            }
+        }
+        
+        report.append("\n### Changes in Focus\n")
+        
+        # Calculate all changes
+        all_changes = []
+        for metric, info in metrics.items():
+            pre_val = float(pre_data[metric])
+            post_val = float(post_data[metric])
+            change = post_val - pre_val
+            all_changes.append((metric, info, pre_val, post_val, change))
+        
+        # Sort by absolute change magnitude and take top 2
+        all_changes.sort(key=lambda x: abs(x[4]), reverse=True)
+        top_changes = all_changes[:2]  # Only take top 2 changes
+        
+        # Display top 2 changes
+        for metric, info, pre_val, post_val, change in top_changes:
+            report.append(f"**{info['name']}** {info['scale']}:\n\n")
+            report.append(f"Pre-war score: {pre_val:.1f}\n")
+            report.append(f"Post-war score: {post_val:.1f}\n")
+            report.append(f"Change: {change:+.1f} points\n\n")
+
+    def _add_narrative_analysis(self, report, pre_data, post_data):
+        """Add narrative analysis to the report."""
+        # Analyze narrative changes
+        pre_narratives = eval(pre_data['narratives']) if isinstance(pre_data['narratives'], str) else pre_data['narratives']
+        post_narratives = eval(post_data['narratives']) if isinstance(post_data['narratives'], str) else post_data['narratives']
+        
+        if pre_narratives or post_narratives:
+            report.append("\n### Narrative Evolution\n")
+            
+            # Show top 3 narratives from each period
+            report.append("**Pre-war Top 3 Narratives:**\n")
+            for narrative in pre_narratives[:3]:
+                report.append(f"- {narrative}\n")
+            
+            report.append("\n**Post-war Top 3 Narratives:**\n")
+            for narrative in post_narratives[:3]:
+                report.append(f"- {narrative}\n")
+            
+            # Create analysis prompt for the LLM
+            prompt = f"""Analyze these two sets of narratives and create a concise summary (max 40 words) of how the user's narrative focus evolved:
+
+            Pre-war narratives:
+            {pre_narratives[:3]}
+
+            Post-war narratives:
+            {post_narratives[:3]}
+
+            Consider:
+            1. What themes remained consistent?
+            2. What new themes emerged?
+            3. What themes were dropped?
+            
+            Format the response as a single, clear sentence."""
+            
+            try:
+                # Make API call using AWS Bedrock
+                response = self.llm_client.invoke_model(
+                    body=json.dumps({
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "max_tokens": 100,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.1
+                    }),
+                    modelId="anthropic.claude-3-haiku-20240307-v1:0",
+                    accept='application/json',
+                    contentType='application/json'
+                )
                 
-                report.append("*Main Narratives:*\n")
-                if isinstance(narratives, str):
-                    narratives = eval(narratives)
-                for narr in narratives:
-                    report.append(f"- {narr}\n")
+                result = json.loads(response.get('body').read())
+                analysis = result.get('content')[0].get('text', '').strip()
                 
-                report.append("\n*Attacked Entities:*\n")
-                if isinstance(attacked, str):
-                    attacked = eval(attacked)
-                for entity in attacked:
+                # Add the analysis to the report
+                report.append("\n**Analysis of Changes:**\n")
+                report.append(f"*{analysis}*\n\n")
+            except Exception as e:
+                # Fallback to metric-based analysis if LLM call fails
+                judicial_security_change = post_data['judicial_security_ratio_score'] - pre_data['judicial_security_ratio_score']
+                domestic_international_change = post_data['domestic_international_ratio_score'] - pre_data['domestic_international_ratio_score']
+                
+                if abs(judicial_security_change) > 20 or abs(domestic_international_change) > 20:
+                    explanation = []
+                    if abs(judicial_security_change) > 20:
+                        if judicial_security_change > 0:
+                            explanation.append("shifted focus more towards judicial reform")
+                        else:
+                            explanation.append("increased emphasis on security concerns")
+                    
+                    if abs(domestic_international_change) > 20:
+                        if domestic_international_change > 0:
+                            explanation.append("focused more on domestic issues")
+                        else:
+                            explanation.append("increased attention to international matters")
+                    
+                    report.append("\n**Analysis of Changes:**\n")
+                    report.append(f"*The narrative {' and '.join(explanation)}.*\n\n")
+
+    def _add_entity_changes(self, report, pre_data, post_data):
+        """Add entity changes to the report."""
+        # Entity changes (only if significant)
+        pre_attacked = set(eval(pre_data['attacked_entities']) if isinstance(pre_data['attacked_entities'], str) else pre_data['attacked_entities'])
+        post_attacked = set(eval(post_data['attacked_entities']) if isinstance(post_data['attacked_entities'], str) else post_data['attacked_entities'])
+        
+        new_targets = post_attacked - pre_attacked
+        dropped_targets = pre_attacked - post_attacked
+        
+        if new_targets or dropped_targets:
+            report.append("\n### Changes in Focus\n")
+            if new_targets:
+                report.append("\n**New Entities Criticized:**\n")
+                for entity in new_targets:
                     report.append(f"- {entity}\n")
-                
-                report.append("\n*Protected Entities:*\n")
-                if isinstance(protected, str):
-                    protected = eval(protected)
-                for entity in protected:
+            if dropped_targets:
+                report.append("\n**No Longer Criticized:**\n")
+                for entity in dropped_targets:
                     report.append(f"- {entity}\n") 
