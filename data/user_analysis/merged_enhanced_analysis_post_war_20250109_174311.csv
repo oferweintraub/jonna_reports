@@ -1,0 +1,4 @@
+username,toxicity_level,emotional_tones,security_vs_judicial_score,government_oversight_score,individual_vs_collective_score,emergency_restrictions_score,domestic_vs_international_score
+AmiadCohen,75.0,"['cynical', 'angry']",66.0,7.9,6.7,6.8,66.0
+SagiBarmak,76.66666666666667,"['cynical', 'angry']",58.333333333333336,6.666666666666667,5.5,5.388888888888889,56.388888888888886
+ptr_dvd,76.78571428571429,"['cynical', 'angry']",69.28571428571429,8.0,6.785714285714286,6.642857142857143,80.71428571428571

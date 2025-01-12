@@ -1,0 +1,3 @@
+username,pre_toxicity,post_toxicity,pre_security_judicial_score,post_security_judicial_score,pre_govt_oversight_score,post_govt_oversight_score,pre_individual_collective_score,post_individual_collective_score,pre_emergency_score,post_emergency_score,pre_domestic_international_score,post_domestic_international_score
+AmiadCohen,73.33333333333333,74.5,0,0,0,0,0,0,0,0,0,0
+ptr_dvd,75.0,77.14285714285714,0,0,0,0,0,0,0,0,0,0
