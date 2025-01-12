@@ -1,4 +1,0 @@
-username,toxicity_level,emotional_tones,security_vs_judicial_score,government_oversight_score,individual_vs_collective_score,emergency_restrictions_score,domestic_vs_international_score
-AmiadCohen,73.33333333333333,"['cynical', 'frustrated']",0,0,0,0,0
-SagiBarmak,75.0,"['cynical', 'angry']",0,0,0,0,0
-ptr_dvd,75.83333333333333,"['cynical', 'angry']",0,0,0,0,0

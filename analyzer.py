@@ -539,8 +539,14 @@ class TweetAnalyzer:
             print("No successful analyses to save")
             return pd.DataFrame() 
 
-    def merge_user_analyses(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Merge multiple batch analyses into single user summaries using LLM with confidence ratings"""
+    def merge_user_analyses(self, df: pd.DataFrame, period_label: str = None) -> pd.DataFrame:
+        """Merge multiple batch analyses into single user summaries using LLM with confidence ratings
+        Args:
+            df: DataFrame containing batch analyses
+            period_label: Optional period label (e.g., 'pre_war', 'post_war')
+        Returns:
+            DataFrame with merged analyses
+        """
         final_results = []
         
         # Process one user at a time
@@ -609,18 +615,44 @@ class TweetAnalyzer:
                 if response:
                     response['username'] = username
                     response['batch_id'] = 0  # Merged summary
+                    if period_label:
+                        response['period'] = period_label
                     final_results.append(response)
                 else:
                     print(f"Failed to merge analyses for {username}")
             except Exception as e:
                 print(f"Error merging analyses for {username}: {str(e)}")
         
-        # Create final DataFrame without saving
+        # Create final DataFrame and save with timestamp and period label
         if final_results:
             final_df = pd.DataFrame(final_results)
             # Remove batch_id as it's no longer needed
             if 'batch_id' in final_df.columns:
                 final_df = final_df.drop('batch_id', axis=1)
+            
+            # Save with timestamp and period label
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+            # Determine save directory based on period_label
+            if period_label:
+                save_dir = os.path.join('data', 'analysis', period_label)
+            else:
+                save_dir = os.path.join('data', 'analysis')
+                
+            # Create directory if it doesn't exist
+            os.makedirs(save_dir, exist_ok=True)
+            
+            # Create filename with period label if provided
+            if period_label:
+                filename = f'merged_analysis_{period_label}_{timestamp}.csv'
+            else:
+                filename = f'merged_analysis_{timestamp}.csv'
+                
+            # Save the merged analysis
+            filepath = os.path.join(save_dir, filename)
+            final_df.to_csv(filepath, index=False)
+            print(f"\nSaved merged analysis to: {filepath}")
+            
             return final_df
         else:
             print("No successful merges to save")

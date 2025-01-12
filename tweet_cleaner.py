@@ -44,11 +44,12 @@ class TweetCleaner:
         
         return cleaned_text
     
-    def clean_tweets(self, input_data):
+    def clean_tweets(self, input_data, period_label=None):
         """
         Clean tweets from input DataFrame or CSV file
         Args:
             input_data: Either a pandas DataFrame or a path to a CSV file
+            period_label: Optional period label (e.g., 'pre_war', 'post_war') for organizing output
         Returns:
             DataFrame with cleaned tweets
         """
@@ -82,7 +83,7 @@ class TweetCleaner:
         
         # Replace original text with cleaned text
         df_cleaned['text'] = df_cleaned['cleaned_text']
-        df_cleaned = df_cleaned.drop('cleaned_text', axis=1)
+        df_cleaned = df_cleaned.drop(['cleaned_text', 'word_count'], axis=1)
         
         # Get cleaned counts
         cleaned_counts = df_cleaned['author_username'].value_counts()
@@ -112,19 +113,27 @@ class TweetCleaner:
         print(f"Total tweets - original: {total_original}, after cleaning: {total_cleaned}")
         print(f"Total removed: {total_removed} ({total_percent:.1f}%)")
         
-        # Save cleaned data if input was a file
-        if isinstance(input_data, str):
-            # Create cleaned filename with timestamp
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            input_filename = os.path.basename(input_data)
-            cleaned_filename = f'cleaned_{input_filename.replace("tweets_", "")}'
+        # Save cleaned data with period-specific organization
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Determine save directory based on period_label
+        if period_label:
+            save_dir = os.path.join('data', 'cleaned', period_label)
+        else:
+            save_dir = os.path.join('data', 'cleaned')
             
-            # Ensure data/cleaned directory exists
-            os.makedirs('data/cleaned', exist_ok=True)
+        # Create directory if it doesn't exist
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Create filename with period label if provided
+        if period_label:
+            filename = f'cleaned_{period_label}_{timestamp}.csv'
+        else:
+            filename = f'cleaned_tweets_{timestamp}.csv'
             
-            # Save to data/cleaned directory
-            filepath = os.path.join('data', 'cleaned', cleaned_filename)
-            df_cleaned.to_csv(filepath, index=False)
-            print(f"\nSaved cleaned tweets to: {filepath}")
+        # Save the cleaned data
+        filepath = os.path.join(save_dir, filename)
+        df_cleaned.to_csv(filepath, index=False)
+        print(f"\nSaved cleaned tweets to: {filepath}")
         
         return df_cleaned 
