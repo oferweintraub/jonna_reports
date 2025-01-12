@@ -1,7 +1,7 @@
-# Environment variables
-.env
-.env.local
-.env.*
+# Data directories
+data/analysis/
+data/cleaned/
+data/raw/
 
 # Python
 __pycache__/
@@ -10,14 +10,14 @@ __pycache__/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-*/.ipynb_checkpoints/*
 
-# VS Code settings
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
 .vscode/
-
-# PyCharm settings
 .idea/ 
-
-# CSV files
-data/raw/*.csv
-data/cleaned/*.csv 
