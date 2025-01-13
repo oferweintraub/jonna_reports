@@ -3,6 +3,7 @@ import io
 from datetime import datetime
 import markdown
 import matplotlib.pyplot as plt
+import os
 
 class HTMLExporter:
     def __init__(self):
@@ -117,7 +118,12 @@ class HTMLExporter:
         # Generate output path if not provided
         if output_path is None:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_path = f'analysis_report_{timestamp}.html'
+            # Save in docs directory by default
+            os.makedirs('docs', exist_ok=True)
+            if report_text.startswith('# Group Analysis Report'):
+                output_path = os.path.join('docs', 'index.html')  # Main page
+            else:
+                output_path = os.path.join('docs', f'report_{timestamp}.html')
         
         # Save the HTML file
         with open(output_path, 'w', encoding='utf-8') as f:

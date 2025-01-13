@@ -2,22 +2,40 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.env
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Virtual Environment
+# Environment
+.env
+.venv
 venv/
-env/
+ENV/
 
-# Data files
-data/user_analysis/*.png
-data/user_analysis/*.md
+# IDE
+.idea/
+.vscode/
 
-# Credentials
+# Project specific
+data/user_analysis/
+data/analysis/
 credentials.json
-token.json
-
-# Generated reports
-analysis_report_*.html 
+token.json 
