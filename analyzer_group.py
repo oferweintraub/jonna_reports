@@ -500,13 +500,13 @@ Provide analysis in this JSON format:
             "## Overall Statistics\n"
         ])
         
-        # 2. Tweet Volumes
+        # 2. Tweet Volumes with percentage change
         volumes = results['tweet_volumes']
+        pct_change = ((volumes['post_war_total'] - volumes['pre_war_total']) / volumes['pre_war_total'] * 100)
         report_sections.extend([
             "### Tweet Volume Analysis\n",
             f"- Total Pre-war Tweets: {volumes['pre_war_total']:,}",
-            f"- Total Post-war Tweets: {volumes['post_war_total']:,}",
-            f"- Overall Change: {volumes['volume_change']:+,}\n",
+            f"- Total Post-war Tweets: {volumes['post_war_total']:,} ({pct_change:+.1f}%)",
             "\nTop Volume Changes:",
             *[f"- <span style='color: #3498DB'>@{user['username']}</span>: {user['change']:+,} tweets ({user['pct_change']:+.1f}%)"
               for user in volumes['top_changers']],
