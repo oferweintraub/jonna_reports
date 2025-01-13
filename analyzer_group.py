@@ -87,11 +87,26 @@ class GroupAnalyzer:
         
         # Calculate volume changes per user
         volume_changes = []
-        for username in pre_df['username'].unique():
-            pre_vol = pre_df[pre_df['username'] == username]['total_tweets'].iloc[0]
-            post_vol = post_df[post_df['username'] == username]['total_tweets'].iloc[0]
+        
+        # Get all unique usernames from both periods
+        all_usernames = set(pre_df['username'].unique()) | set(post_df['username'].unique())
+        
+        for username in all_usernames:
+            # Get pre-war volume (0 if user not present)
+            pre_vol = pre_df[pre_df['username'] == username]['total_tweets'].iloc[0] if username in pre_df['username'].values else 0
+            
+            # Get post-war volume (0 if user not present)
+            post_vol = post_df[post_df['username'] == username]['total_tweets'].iloc[0] if username in post_df['username'].values else 0
+            
             change = post_vol - pre_vol
-            pct_change = (change / pre_vol * 100) if pre_vol > 0 else float('inf')
+            # Calculate percentage change, handling division by zero
+            if pre_vol > 0:
+                pct_change = (change / pre_vol * 100)
+            elif post_vol > 0:
+                pct_change = float('inf')  # Infinite increase from 0
+            else:
+                pct_change = 0  # No change if both volumes are 0
+                
             volume_changes.append({
                 'username': username,
                 'pre_vol': pre_vol,
@@ -100,7 +115,7 @@ class GroupAnalyzer:
                 'pct_change': pct_change
             })
         
-        # Sort and get top 3 changers
+        # Sort and get top 3 changers by absolute change
         volumes['top_changers'] = sorted(
             volume_changes, 
             key=lambda x: abs(x['change']), 
@@ -114,15 +129,22 @@ class GroupAnalyzer:
         def get_toxic_tweets(df: pd.DataFrame) -> List[Dict]:
             toxic_tweets = []
             for _, row in df.iterrows():
-                examples = eval(row['toxic_examples'])
-                toxicity = float(row['toxicity_level'])
-                for tweet in examples:
-                    toxic_tweets.append({
-                        'username': row['username'],
-                        'tweet': tweet,
-                        'toxicity': toxicity
-                    })
-            return sorted(toxic_tweets, key=lambda x: x['toxicity'], reverse=True)[:3]
+                try:
+                    examples = eval(row['toxic_examples'])
+                    toxicity = float(row['toxicity_level'])
+                    for tweet in examples:
+                        toxic_tweets.append({
+                            'username': row['username'],
+                            'tweet': tweet,
+                            'toxicity': toxicity
+                        })
+                except (ValueError, SyntaxError) as e:
+                    print(f"Warning: Could not process toxic tweets for user {row['username']}: {e}")
+                    continue
+            
+            # Sort by toxicity and return top 3, or fewer if less than 3 available
+            sorted_tweets = sorted(toxic_tweets, key=lambda x: x['toxicity'], reverse=True)
+            return sorted_tweets[:3] if sorted_tweets else []
         
         return {
             'pre_war_toxic': get_toxic_tweets(pre_df),
@@ -141,28 +163,42 @@ class GroupAnalyzer:
             
             # Calculate changes per user
             user_changes = []
-            for username in pre_df['username'].unique():
-                pre_val = pre_df[pre_df['username'] == username][metric_key].iloc[0]
-                post_val = post_df[post_df['username'] == username][metric_key].iloc[0]
-                change = post_val - pre_val
-                user_changes.append({
-                    'username': username,
-                    'change': change,
-                    'pre_val': pre_val,
-                    'post_val': post_val
-                })
             
-            # Sort and get top 3 changers
+            # Get all unique usernames from both periods
+            all_usernames = set(pre_df['username'].unique()) | set(post_df['username'].unique())
+            
+            for username in all_usernames:
+                try:
+                    # Get pre-war value (0 if user not present)
+                    pre_val = pre_df[pre_df['username'] == username][metric_key].iloc[0] if username in pre_df['username'].values else 0
+                    
+                    # Get post-war value (0 if user not present)
+                    post_val = post_df[post_df['username'] == username][metric_key].iloc[0] if username in post_df['username'].values else 0
+                    
+                    change = post_val - pre_val
+                    user_changes.append({
+                        'username': username,
+                        'change': change,
+                        'pre_val': pre_val,
+                        'post_val': post_val
+                    })
+                except (IndexError, KeyError) as e:
+                    print(f"Warning: Could not process metric {metric_key} for user {username}: {e}")
+                    continue
+            
+            # Sort and get top 3 changers by absolute change
+            top_changers = sorted(
+                user_changes,
+                key=lambda x: abs(x['change']),
+                reverse=True
+            )[:3] if user_changes else []
+            
             metrics_analysis[metric_key] = {
                 'name': metric_info['name'],
                 'scale': metric_info['scale'],
                 'description': metric_info['description'],
                 'group_change': avg_change,
-                'top_changers': sorted(
-                    user_changes,
-                    key=lambda x: abs(x['change']),
-                    reverse=True
-                )[:3]
+                'top_changers': top_changers
             }
         
         return metrics_analysis
@@ -171,21 +207,35 @@ class GroupAnalyzer:
         """Analyze top changers in toxicity levels."""
         toxicity_changes = []
         
-        for username in pre_df['username'].unique():
-            pre_tox = float(pre_df[pre_df['username'] == username]['toxicity_level'].iloc[0])
-            post_tox = float(post_df[post_df['username'] == username]['toxicity_level'].iloc[0])
-            change = post_tox - pre_tox
-            toxicity_changes.append({
-                'username': username,
-                'change': change
-            })
+        # Get all unique usernames from both periods
+        all_usernames = set(pre_df['username'].unique()) | set(post_df['username'].unique())
+        
+        for username in all_usernames:
+            try:
+                # Get pre-war toxicity (0 if user not present)
+                pre_tox = float(pre_df[pre_df['username'] == username]['toxicity_level'].iloc[0]) if username in pre_df['username'].values else 0.0
+                
+                # Get post-war toxicity (0 if user not present)
+                post_tox = float(post_df[post_df['username'] == username]['toxicity_level'].iloc[0]) if username in post_df['username'].values else 0.0
+                
+                change = post_tox - pre_tox
+                toxicity_changes.append({
+                    'username': username,
+                    'change': change
+                })
+            except (ValueError, IndexError) as e:
+                print(f"Warning: Could not process toxicity for user {username}: {e}")
+                continue
+        
+        # Sort and get top 3 changers by absolute change
+        top_changers = sorted(
+            toxicity_changes,
+            key=lambda x: abs(x['change']),
+            reverse=True
+        )[:3] if toxicity_changes else []
         
         return {
-            'toxicity_top_changers': sorted(
-                toxicity_changes,
-                key=lambda x: abs(x['change']),
-                reverse=True
-            )[:3]
+            'toxicity_top_changers': top_changers
         }
 
     def _analyze_entity_changes(self, pre_df: pd.DataFrame, post_df: pd.DataFrame) -> Dict:
@@ -318,58 +368,98 @@ IMPORTANT:
             result = json.loads(response.get('body').read())
             content = result.get('content')[0].get('text', '').strip()
             
-            # Clean up the response to ensure valid JSON
+            # Clean up the response
             content = content.replace('```json', '').replace('```', '').strip()
-            if not content.startswith('{'):
-                content = content[content.find('{'):]
-            if not content.endswith('}'):
-                content = content[:content.rfind('}')+1]
+            start_idx = content.find('{')
+            end_idx = content.rfind('}')
+            
+            if start_idx == -1 or end_idx == -1:
+                raise ValueError("No valid JSON object found in response")
                 
+            content = content[start_idx:end_idx + 1]
             analysis = json.loads(content)
             
         except Exception as e:
-            print(f"Error in narrative analysis: {e}")
-            print("Using fallback raw data analysis...")
-            
-            # Fallback: Use raw data without LLM grouping
-            pre_top_3 = sorted(pre_percentages.items(), key=lambda x: x[1], reverse=True)
-            post_top_3 = sorted(post_percentages.items(), key=lambda x: x[1], reverse=True)
-            
-            # Calculate "Others" percentage for pre-war
-            pre_top_3_sum = sum(p for _, p in pre_top_3[:3])
-            pre_others = 100 - pre_top_3_sum
-            
-            # Calculate "Others" percentage for post-war
-            post_top_3_sum = sum(p for _, p in post_top_3[:3])
-            post_others = 100 - post_top_3_sum
-            
-            analysis = {
-                'pre_war_top_3': [
-                    {
-                        "narrative": narrative,
-                        "percentage": percentage,
-                        "merged_from": [narrative]
-                    } 
-                    for narrative, percentage in pre_top_3[:3]
-                ] + [{
-                    "narrative": "Others",
-                    "percentage": pre_others,
-                    "merged_from": [n for n, _ in pre_top_3[3:]]
-                }],
-                'post_war_top_3': [
-                    {
+            # Fallback to raw data analysis
+            if not pre_percentages and not post_percentages:
+                analysis = {
+                    'pre_war_top_3': [],
+                    'post_war_top_3': [],
+                    'analysis': "No narratives found in the data",
+                    'narrative_popularity': {
+                        'pre_war': {},
+                        'post_war': {}
+                    }
+                }
+            else:
+                # Use raw data without LLM grouping
+                pre_top_3 = sorted(pre_percentages.items(), key=lambda x: x[1], reverse=True)
+                post_top_3 = sorted(post_percentages.items(), key=lambda x: x[1], reverse=True)
+                
+                # Initialize with empty lists
+                analysis = {
+                    'pre_war_top_3': [],
+                    'post_war_top_3': [],
+                    'analysis': "Analysis using raw data due to LLM service unavailability",
+                    'narrative_popularity': {
+                        'pre_war': {},
+                        'post_war': {}
+                    }
+                }
+                
+                # Add top 3 pre-war narratives if available
+                for narrative, percentage in pre_top_3[:3]:
+                    entry = {
                         "narrative": narrative,
                         "percentage": percentage,
                         "merged_from": [narrative]
                     }
-                    for narrative, percentage in post_top_3[:3]
-                ] + [{
-                    "narrative": "Others",
-                    "percentage": post_others,
-                    "merged_from": [n for n, _ in post_top_3[3:]]
-                }],
-                'analysis': "Analysis using raw data due to LLM service unavailability"
-            }
+                    analysis['pre_war_top_3'].append(entry)
+                    analysis['narrative_popularity']['pre_war'][narrative] = percentage
+                
+                # Add top 3 post-war narratives if available
+                for narrative, percentage in post_top_3[:3]:
+                    entry = {
+                        "narrative": narrative,
+                        "percentage": percentage,
+                        "merged_from": [narrative]
+                    }
+                    analysis['post_war_top_3'].append(entry)
+                    analysis['narrative_popularity']['post_war'][narrative] = percentage
+                
+                # Calculate and add "Others" for pre-war if needed
+                if len(pre_top_3) > 3:
+                    pre_top_3_sum = sum(p for _, p in pre_top_3[:3])
+                    pre_others = 100 - pre_top_3_sum
+                    if pre_others > 0:
+                        entry = {
+                            "narrative": "Others",
+                            "percentage": pre_others,
+                            "merged_from": [n for n, _ in pre_top_3[3:]]
+                        }
+                        analysis['pre_war_top_3'].append(entry)
+                        analysis['narrative_popularity']['pre_war']["Others"] = pre_others
+                
+                # Calculate and add "Others" for post-war if needed
+                if len(post_top_3) > 3:
+                    post_top_3_sum = sum(p for _, p in post_top_3[:3])
+                    post_others = 100 - post_top_3_sum
+                    if post_others > 0:
+                        entry = {
+                            "narrative": "Others",
+                            "percentage": post_others,
+                            "merged_from": [n for n, _ in post_top_3[3:]]
+                        }
+                        analysis['post_war_top_3'].append(entry)
+                        analysis['narrative_popularity']['post_war']["Others"] = post_others
+        
+        # Add narrative popularity data structure
+        analysis['narrative_popularity'] = {
+            'pre_war': {item['narrative']: item['percentage'] 
+                       for item in analysis['pre_war_top_3']},
+            'post_war': {item['narrative']: item['percentage'] 
+                        for item in analysis['post_war_top_3']}
+        }
         
         # Add a separate LLM call just for the evolution analysis
         try:
@@ -411,16 +501,7 @@ NO other text, NO explanations, EXACTLY 34 words."""
             analysis['analysis'] = evolution_content
             
         except Exception as e:
-            print(f"Error in evolution analysis: {e}")
             analysis['analysis'] = "Analysis using raw data due to LLM service unavailability"
-        
-        # Convert distributions to the format expected by the visualization
-        analysis['narrative_popularity'] = {
-            'pre_war': {item['narrative']: item['percentage'] 
-                       for item in analysis['pre_war_top_3']},
-            'post_war': {item['narrative']: item['percentage'] 
-                        for item in analysis['post_war_top_3']}
-        }
         
         return analysis
 
@@ -473,27 +554,31 @@ NO other text, NO explanations, EXACTLY 34 words."""
         figures.append(fig_toxicity)
         
         # 5. Narrative Distribution (increased size)
-        fig_narratives = plt.figure(figsize=(40, 48))  # Made even taller
-        fig_narratives.patch.set_facecolor('#1e1e1e')
-        
-        # Create gridspec with more vertical space
-        gs = fig_narratives.add_gridspec(
-            1, 2,
-            width_ratios=[1, 1],
-            wspace=0.4,
-            left=0.1,
-            right=0.9,
-            top=0.85,
-            bottom=0.15
-        )
-        
-        ax1 = fig_narratives.add_subplot(gs[0])
-        ax2 = fig_narratives.add_subplot(gs[1])
-        ax1.set_facecolor('#1e1e1e')
-        ax2.set_facecolor('#1e1e1e')
-        
-        self._plot_narrative_distribution(ax1, ax2, results['narrative_analysis'])
-        figures.append(fig_narratives)
+        if 'narrative_analysis' in results:
+            fig_narratives = plt.figure(figsize=(40, 48))  # Made even taller
+            fig_narratives.patch.set_facecolor('#1e1e1e')
+            
+            # Create gridspec with more vertical space
+            gs = fig_narratives.add_gridspec(
+                1, 2,
+                width_ratios=[1, 1],
+                wspace=0.4,
+                left=0.1,
+                right=0.9,
+                top=0.85,
+                bottom=0.15
+            )
+            
+            ax1 = fig_narratives.add_subplot(gs[0])
+            ax2 = fig_narratives.add_subplot(gs[1])
+            ax1.set_facecolor('#1e1e1e')
+            ax2.set_facecolor('#1e1e1e')
+            
+            try:
+                self._plot_narrative_distribution(ax1, ax2, results['narrative_analysis'])
+                figures.append(fig_narratives)
+            except Exception as e:
+                plt.close(fig_narratives)  # Clean up the figure if there's an error
         
         # 6. User Activity Timeline
         fig_timeline = plt.figure(figsize=(20, 10), constrained_layout=True)
@@ -682,65 +767,74 @@ NO other text, NO explanations, EXACTLY 34 words."""
                 lines.append(' '.join(current_line))
             return '\n'.join(lines)
 
-        # Display pre-war narratives directly from narrative_data
-        pre_war_narratives = [n for n in narrative_data['pre_war_top_3'] if n['narrative'] != "Others" or n['percentage'] > 0]
-        for i, item in enumerate(pre_war_narratives):
-            narrative = item['narrative']
-            percentage = item['percentage']
+        def plot_narratives(ax, narratives, title):
+            """Helper function to plot narratives for one period."""
+            # Filter out "Others" if percentage is 0
+            filtered_narratives = [n for n in narratives 
+                                 if n['narrative'] != "Others" or n['percentage'] > 0]
             
-            # Format text with manual line breaks
-            formatted_text = format_text(narrative)
-            text = f"{formatted_text}\n{percentage:.1f}%"
+            # Plot each narrative
+            for i, item in enumerate(filtered_narratives):
+                if i >= len(y_positions):  # Safety check
+                    break
+                    
+                narrative = item['narrative']
+                percentage = item['percentage']
+                
+                # Format text with manual line breaks
+                formatted_text = format_text(narrative)
+                text = f"{formatted_text}\n{percentage:.1f}%"
+                
+                # Create text box
+                bbox_props = dict(
+                    boxstyle="round,pad=0.3",
+                    fc=colors[i % len(colors)],  # Safely cycle through colors
+                    ec="white",
+                    alpha=0.8,
+                    mutation_scale=2.0
+                )
+                
+                # Add text with adjusted position and width
+                ax.text(0.5, y_positions[i], text,
+                       color='black',
+                       fontsize=42,
+                       weight='bold',
+                       ha='center',
+                       va='center',
+                       bbox=bbox_props,
+                       transform=ax.transAxes,
+                       linespacing=1.3)
             
-            # Create text box
-            bbox_props = dict(
-                boxstyle="round,pad=0.3",
-                fc=colors[i],
-                ec="white",
-                alpha=0.8,
-                mutation_scale=2.0
-            )
-            
-            # Add text with adjusted position and width
-            ax1.text(0.5, y_positions[i], text,
-                    color='black',
-                    fontsize=42,
-                    weight='bold',
-                    ha='center',
-                    va='center',
-                    bbox=bbox_props,
-                    transform=ax1.transAxes,
-                    linespacing=1.3)
+            # If no narratives, display a message
+            if not filtered_narratives:
+                ax.text(0.5, 0.5, "No narratives available",
+                       color='white',
+                       fontsize=42,
+                       ha='center',
+                       va='center',
+                       transform=ax.transAxes)
         
-        # Display post-war narratives directly from narrative_data
-        post_war_narratives = [n for n in narrative_data['post_war_top_3'] if n['narrative'] != "Others" or n['percentage'] > 0]
-        for i, item in enumerate(post_war_narratives):
-            narrative = item['narrative']
-            percentage = item['percentage']
-            
-            # Format text with manual line breaks
-            formatted_text = format_text(narrative)
-            text = f"{formatted_text}\n{percentage:.1f}%"
-            
-            # Create text box
-            bbox_props = dict(
-                boxstyle="round,pad=0.3",
-                fc=colors[i],
-                ec="white",
-                alpha=0.8,
-                mutation_scale=2.0
-            )
-            
-            # Add text with adjusted position and width
-            ax2.text(0.5, y_positions[i], text,
-                    color='black',
+        # Plot pre-war narratives
+        if 'pre_war_top_3' in narrative_data:
+            plot_narratives(ax1, narrative_data['pre_war_top_3'], 'Pre-war')
+        else:
+            ax1.text(0.5, 0.5, "No pre-war narratives available",
+                    color='white',
                     fontsize=42,
-                    weight='bold',
                     ha='center',
                     va='center',
-                    bbox=bbox_props,
-                    transform=ax2.transAxes,
-                    linespacing=1.3)
+                    transform=ax1.transAxes)
+        
+        # Plot post-war narratives
+        if 'post_war_top_3' in narrative_data:
+            plot_narratives(ax2, narrative_data['post_war_top_3'], 'Post-war')
+        else:
+            ax2.text(0.5, 0.5, "No post-war narratives available",
+                    color='white',
+                    fontsize=42,
+                    ha='center',
+                    va='center',
+                    transform=ax2.transAxes)
 
     def _plot_user_activity_timeline(self, ax, volume_data: Dict):
         """Plot user activity timeline for top 3 users."""
