@@ -428,15 +428,15 @@ NO other text, NO explanations, EXACTLY 34 words."""
         """Generate all visualizations for group analysis."""
         figures = []
         
-        # Set the default figure style and font sizes
+        # Set the default figure style and font sizes - INCREASED ALL SIZES
         plt.style.use('dark_background')
         plt.rcParams.update({
-            'font.size': 14,
-            'axes.titlesize': 20,
-            'axes.labelsize': 16,
-            'xtick.labelsize': 14,
-            'ytick.labelsize': 14,
-            'legend.fontsize': 14
+            'font.size': 24,  # Increased from 14
+            'axes.titlesize': 32,  # Increased from 20
+            'axes.labelsize': 28,  # Increased from 16
+            'xtick.labelsize': 24,  # Increased from 14
+            'ytick.labelsize': 24,  # Increased from 14
+            'legend.fontsize': 24   # Increased from 14
         })
         
         # 1. Tweet Volume Changes
@@ -518,9 +518,9 @@ NO other text, NO explanations, EXACTLY 34 words."""
         users = [change['username'] for change in volume_data['top_changers']]
         changes = [change['change'] for change in volume_data['top_changers']]
         
-        bars = ax.bar(users, changes, color='#2980b9')  # Changed to a darker, more pronounced blue
-        ax.set_title('Top Volume Changes by User', fontsize=14, color='white')
-        ax.set_ylabel('Change in Tweet Count', fontsize=12, color='white')
+        bars = ax.bar(users, changes, color='#2980b9')
+        ax.set_title('Top Volume Changes by User', fontsize=32, color='white', pad=20)
+        ax.set_ylabel('Change in Tweet Count', fontsize=28, color='white')
         ax.grid(True, alpha=0.3)
         
         # Style improvements
@@ -529,54 +529,53 @@ NO other text, NO explanations, EXACTLY 34 words."""
         ax.spines['top'].set_color('white')
         ax.spines['left'].set_color('white')
         ax.spines['right'].set_color('white')
-        ax.tick_params(colors='white')
+        ax.tick_params(colors='white', labelsize=24)
         
-        # Add value labels inside bars
+        # Add value labels inside bars with larger font
         for bar in bars:
             height = bar.get_height()
-            y_pos = height/2 if height >= 0 else height/2  # Position in middle of bar
+            y_pos = height/2 if height >= 0 else height/2
             ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                    f'{int(height):+,}',
                    ha='center', va='center',
-                   color='white', weight='bold')
+                   color='white', weight='bold',
+                   fontsize=24)
 
     def _plot_metrics_changes(self, ax, metrics_data: Dict):
         """Plot metrics changes."""
         metrics = list(metrics_data.keys())
         changes = [data['group_change'] for data in metrics_data.values()]
         
-        # Create bars with different colors based on change direction
-        x = np.arange(len(metrics))  # Create x positions for bars
+        x = np.arange(len(metrics))
         bars = ax.bar(x, changes)
         for bar, change in zip(bars, changes):
             bar.set_color('#2ecc71' if change >= 0 else '#e74c3c')
             bar.set_alpha(0.6)
+            
+        ax.set_title('Group-Level Metrics Changes', fontsize=32, color='white', pad=20)
+        ax.set_ylabel('Average Change', fontsize=28, color='white')
         
-        ax.set_title('Group-Level Metrics Changes', fontsize=14, color='white')
-        ax.set_ylabel('Average Change', fontsize=12, color='white')
-        
-        # Set both tick positions and labels
         ax.set_xticks(x)
         ax.set_xticklabels([metrics_data[m]['name'] for m in metrics], 
-                          rotation=45, ha='right', color='white')
+                          rotation=45, ha='right', color='white', fontsize=24)
         
-        # Style improvements
         ax.set_facecolor('#1e1e1e')
         ax.spines['bottom'].set_color('white')
         ax.spines['top'].set_color('white')
         ax.spines['left'].set_color('white')
         ax.spines['right'].set_color('white')
-        ax.tick_params(colors='white')
+        ax.tick_params(colors='white', labelsize=24)
         ax.grid(True, alpha=0.3)
         
-        # Add value labels inside bars
+        # Add value labels with larger font
         for bar in bars:
             height = bar.get_height()
-            y_pos = height/2 if height >= 0 else height/2  # Position in middle of bar
+            y_pos = height/2 if height >= 0 else height/2
             ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                    f'{height:+.1f}',
                    ha='center', va='center',
-                   color='white', weight='bold')
+                   color='white', weight='bold',
+                   fontsize=24)
 
     def _plot_toxicity_changes(self, ax, toxicity_data: List[Dict]):
         """Plot toxicity changes."""
@@ -588,60 +587,58 @@ NO other text, NO explanations, EXACTLY 34 words."""
             bar.set_color('#2ecc71' if change >= 0 else '#e74c3c')
             bar.set_alpha(0.6)
             
-        ax.set_title('Top Toxicity Changes by User', fontsize=14, color='white')
-        ax.set_ylabel('Change in Toxicity Level', fontsize=12, color='white')
+        ax.set_title('Top Toxicity Changes by User', fontsize=32, color='white', pad=20)
+        ax.set_ylabel('Change in Toxicity Level', fontsize=28, color='white')
         
-        # Style improvements
         ax.set_facecolor('#1e1e1e')
         ax.spines['bottom'].set_color('white')
         ax.spines['top'].set_color('white')
         ax.spines['left'].set_color('white')
         ax.spines['right'].set_color('white')
-        ax.tick_params(colors='white')
+        ax.tick_params(colors='white', labelsize=24)
         ax.grid(True, alpha=0.3)
         
-        # Add value labels inside bars
+        # Add value labels with larger font
         for bar in bars:
             height = bar.get_height()
-            y_pos = height/2 if height >= 0 else height/2  # Position in middle of bar
+            y_pos = height/2 if height >= 0 else height/2
             ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                    f'{height:+.1f}',
                    ha='center', va='center',
-                   color='white', weight='bold')
+                   color='white', weight='bold',
+                   fontsize=24)
 
     def _plot_metric_top_changers(self, ax, metric_data: Dict):
         """Plot top changers for a specific metric."""
         users = [change['username'] for change in metric_data['top_changers']]
         changes = [change['change'] for change in metric_data['top_changers']]
         
-        # Create bars with different colors based on change direction
         bars = ax.bar(users, changes)
         for bar, change in zip(bars, changes):
             bar.set_color('#2ecc71' if change >= 0 else '#e74c3c')
             bar.set_alpha(0.6)
-        
-        # Customize plot
+            
         ax.set_title(f'Top Changes in {metric_data["name"]}\n{metric_data["scale"]}', 
-                    fontsize=14, pad=20, color='white')
-        ax.set_ylabel('Change in Score', fontsize=12, color='white')
+                    fontsize=32, pad=20, color='white')
+        ax.set_ylabel('Change in Score', fontsize=28, color='white')
         ax.grid(True, alpha=0.3)
         
-        # Style improvements
         ax.set_facecolor('#1e1e1e')
         ax.spines['bottom'].set_color('white')
         ax.spines['top'].set_color('white')
         ax.spines['left'].set_color('white')
         ax.spines['right'].set_color('white')
-        ax.tick_params(colors='white')
+        ax.tick_params(colors='white', labelsize=24)
         
-        # Add value labels inside bars
+        # Add value labels with larger font
         for bar in bars:
             height = bar.get_height()
-            y_pos = height/2 if height >= 0 else height/2  # Position in middle of bar
+            y_pos = height/2 if height >= 0 else height/2
             ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                    f'{height:+.1f}',
                    ha='center', va='center',
-                   color='white', weight='bold')
+                   color='white', weight='bold',
+                   fontsize=24)
 
     def _plot_narrative_distribution(self, ax1, ax2, narrative_data):
         """Plot narrative distribution as text blocks."""
@@ -746,13 +743,11 @@ NO other text, NO explanations, EXACTLY 34 words."""
                     linespacing=1.3)
 
     def _plot_user_activity_timeline(self, ax, volume_data: Dict):
-        """Plot user activity timeline for top 3 users by volume change."""
-        # Get top 3 users by absolute volume change
+        """Plot user activity timeline for top 3 users."""
         users = [change['username'] for change in volume_data['top_changers']]
         pre_volumes = []
         post_volumes = []
         
-        # Get actual volumes for each user
         for user in users:
             pre_vol = next((change['pre_vol'] for change in volume_data['top_changers'] 
                           if change['username'] == user), 0)
@@ -762,64 +757,57 @@ NO other text, NO explanations, EXACTLY 34 words."""
             post_volumes.append(post_vol)
         
         x = ['Pre-war', 'Post-war']
-        colors = ['#FF9999', '#66B2FF', '#99FF99']  # Consistent colors
+        colors = ['#FF9999', '#66B2FF', '#99FF99']
         
         for i, (user, color) in enumerate(zip(users, colors)):
             ax.plot(x, [pre_volumes[i], post_volumes[i]], 'o-', 
-                   label=f'@{user}', color=color, linewidth=2, markersize=8)
+                   label=f'@{user}', color=color, linewidth=3, markersize=12)
         
-        ax.set_title('Tweet Volume Timeline (Top 3 Users)', pad=20, fontsize=14, color='white')
-        ax.set_ylabel('Tweet Count', fontsize=12, color='white')
+        ax.set_title('Tweet Volume Timeline (Top 3 Users)', pad=20, fontsize=32, color='white')
+        ax.set_ylabel('Tweet Count', fontsize=28, color='white')
         ax.grid(True, alpha=0.3)
-        ax.legend(fontsize=10, facecolor='#1e1e1e', labelcolor='white')
+        ax.legend(fontsize=24, facecolor='#1e1e1e', labelcolor='white')
         
-        # Style improvements
         ax.set_facecolor('#1e1e1e')
         ax.spines['bottom'].set_color('white')
         ax.spines['top'].set_color('white')
         ax.spines['left'].set_color('white')
         ax.spines['right'].set_color('white')
-        ax.tick_params(colors='white')
+        ax.tick_params(colors='white', labelsize=24)
 
     def _plot_toxicity_volume_correlation(self, ax, volume_data: Dict, toxicity_data: List[Dict]):
-        """Plot scatter of toxicity vs volume changes for top 3 users."""
-        # Get data for top 3 users by volume change
+        """Plot scatter of toxicity vs volume changes."""
         users = volume_data['top_changers'][:3]
         toxicity_changes = {user['username']: user['change'] for user in toxicity_data}
         
-        # Use consistent colors
         colors = ['#FF9999', '#66B2FF', '#99FF99']
         
-        # Create scatter plot with larger points
         for i, user in enumerate(users):
             username = user['username']
             volume_change = user['change']
             toxicity_change = toxicity_changes.get(username, 0)
             color = colors[i]
             
-            # Larger scatter points with higher opacity
-            ax.scatter(volume_change, toxicity_change, s=200, color=color, alpha=0.9)
-            # Add label with white background for better visibility
+            ax.scatter(volume_change, toxicity_change, s=300, color=color, alpha=0.9)
             ax.annotate(f'@{username}', 
                        (volume_change, toxicity_change),
                        xytext=(10, 10), textcoords='offset points',
-                       fontsize=12, color=color, weight='bold',
+                       fontsize=24, color=color, weight='bold',
                        bbox=dict(facecolor='#1e1e1e', edgecolor='white', alpha=0.8, pad=1))
         
-        ax.set_title('Volume vs Toxicity Changes (Top 3 Users)', pad=20, fontsize=14, color='white')
-        ax.set_xlabel('Change in Tweet Volume', fontsize=12, color='white')
-        ax.set_ylabel('Change in Toxicity', fontsize=12, color='white')
+        ax.set_title('Volume vs Toxicity Changes (Top 3 Users)', pad=20, fontsize=32, color='white')
+        ax.set_xlabel('Change in Tweet Volume', fontsize=28, color='white')
+        ax.set_ylabel('Change in Toxicity', fontsize=28, color='white')
         ax.grid(True, alpha=0.3)
         ax.axhline(y=0, color='white', linestyle='--', alpha=0.3)
         ax.axvline(x=0, color='white', linestyle='--', alpha=0.3)
         
-        # Style improvements
         ax.set_facecolor('#1e1e1e')
         ax.spines['bottom'].set_color('white')
         ax.spines['top'].set_color('white')
         ax.spines['left'].set_color('white')
         ax.spines['right'].set_color('white')
-        ax.tick_params(colors='white')
+        ax.tick_params(colors='white', labelsize=24)
 
     def generate_report(self, results: Dict) -> Tuple[str, List[plt.Figure]]:
         """Generate a comprehensive group analysis report."""
@@ -970,7 +958,7 @@ NO other text, NO explanations, EXACTLY 34 words."""
     def _plot_emotional_tones(self, pre_tones: Dict, post_tones: Dict) -> plt.Figure:
         """Create a single bar chart comparing pre/post war emotional tones."""
         # Create a larger figure
-        fig = plt.figure(figsize=(24, 16), constrained_layout=True)  # Increased height
+        fig = plt.figure(figsize=(24, 16), constrained_layout=True)
         ax = fig.add_subplot(111)
         fig.patch.set_facecolor('#1e1e1e')
         ax.set_facecolor('#1e1e1e')
@@ -982,7 +970,7 @@ NO other text, NO explanations, EXACTLY 34 words."""
         all_tones = sorted(all_tones, key=lambda x: total_percentages[x], reverse=True)
         
         x = np.arange(len(all_tones))
-        width = 0.35  # Width of the bars
+        width = 0.35
         
         # Create bars
         pre_values = [pre_tones.get(tone, 0) for tone in all_tones]
@@ -993,37 +981,37 @@ NO other text, NO explanations, EXACTLY 34 words."""
         bars2 = ax.bar(x + width/2, post_values, width, label='Post-war', 
                       color='#66B2FF', alpha=0.9)
         
-        # Customize plot
-        ax.set_title('Emotional Tones Distribution', color='white', pad=30, fontsize=32)
-        ax.set_ylabel('Percentage (%)', color='white', fontsize=28)
+        # Customize plot with larger fonts
+        ax.set_title('Emotional Tones Distribution', color='white', pad=30, fontsize=40)
+        ax.set_ylabel('Percentage (%)', color='white', fontsize=36)
         ax.set_xticks(x)
         ax.set_xticklabels([tone.title() for tone in all_tones], 
-                          rotation=30, ha='right', fontsize=24)
+                          rotation=30, ha='right', fontsize=32)
         
         # Style improvements
         ax.spines['bottom'].set_color('white')
         ax.spines['top'].set_color('white')
         ax.spines['left'].set_color('white')
         ax.spines['right'].set_color('white')
-        ax.tick_params(axis='y', colors='white', labelsize=24)
-        ax.set_ylim(0, max(max(pre_values), max(post_values)) * 1.2)  # Add 20% padding
+        ax.tick_params(axis='y', colors='white', labelsize=32)
+        ax.set_ylim(0, max(max(pre_values), max(post_values)) * 1.2)
         ax.grid(True, alpha=0.2, color='white')
         
         # Add legend with larger font
-        legend = ax.legend(fontsize=24, facecolor='#1e1e1e', labelcolor='white',
+        legend = ax.legend(fontsize=32, facecolor='#1e1e1e', labelcolor='white',
                          loc='upper right', bbox_to_anchor=(1, 1))
         legend.get_frame().set_alpha(0.9)
         
-        # Add value labels inside the bars
+        # Add value labels with larger font
         def autolabel(bars):
             for bar in bars:
                 height = bar.get_height()
-                y_pos = height/2  # Position in middle of bar
+                y_pos = height/2
                 ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                        f'{height:.1f}%',
                        ha='center', va='center',
                        color='white',
-                       fontsize=24,
+                       fontsize=32,
                        fontweight='bold')
         
         autolabel(bars1)
