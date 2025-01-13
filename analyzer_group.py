@@ -56,6 +56,7 @@ class GroupAnalyzer:
             'toxic_tweets': self._analyze_toxic_tweets(pre_war_data, post_war_data),
             'metrics_changes': self._analyze_metrics_changes(pre_war_data, post_war_data),
             'top_changers': self._analyze_top_changers(pre_war_data, post_war_data),
+            'entity_changes': self._analyze_entity_changes(pre_war_data, post_war_data),
             'narrative_analysis': self._analyze_narratives(pre_war_data, post_war_data)
         }
         
@@ -173,6 +174,25 @@ class GroupAnalyzer:
                 key=lambda x: abs(x['change']),
                 reverse=True
             )[:3]
+        }
+
+    def _analyze_entity_changes(self, pre_df: pd.DataFrame, post_df: pd.DataFrame) -> Dict:
+        """Analyze changes in attacked entities."""
+        
+        def get_all_entities(df: pd.DataFrame, column: str) -> set:
+            """Extract all unique entities from a DataFrame column."""
+            entities = set()
+            for row in df[column]:
+                entities.update(eval(row))
+            return entities
+        
+        # Get all entities from both periods
+        pre_attacked = get_all_entities(pre_df, 'attacked_entities')
+        post_attacked = get_all_entities(post_df, 'attacked_entities')
+        
+        return {
+            'new_attacked': list(post_attacked - pre_attacked)[:8],
+            'no_longer_attacked': list(pre_attacked - post_attacked)[:8]
         }
 
     def _analyze_narratives(self, pre_df: pd.DataFrame, post_df: pd.DataFrame) -> Dict:
@@ -488,7 +508,7 @@ Provide analysis in this JSON format:
             f"- Total Post-war Tweets: {volumes['post_war_total']:,}",
             f"- Overall Change: {volumes['volume_change']:+,}\n",
             "\nTop Volume Changes:",
-            *[f"- @{user['username']}: {user['change']:+,} tweets ({user['pct_change']:+.1f}%)"
+            *[f"- <span style='color: #3498DB'>@{user['username']}</span>: {user['change']:+,} tweets ({user['pct_change']:+.1f}%)"
               for user in volumes['top_changers']],
             "\n"
         ])
@@ -498,10 +518,10 @@ Provide analysis in this JSON format:
         report_sections.extend([
             "### Most Toxic Tweets\n",
             "Pre-war Period:",
-            *[f"- @{tweet['username']} (toxicity: {tweet['toxicity']:.1f}):\n  ```\n  {tweet['tweet']}\n  ```"
+            *[f"- <span style='color: #3498DB'>@{tweet['username']}</span> (toxicity: {tweet['toxicity']:.1f}):\n  ```\n  {tweet['tweet']}\n  ```"
               for tweet in toxic['pre_war_toxic']],
             "\nPost-war Period:",
-            *[f"- @{tweet['username']} (toxicity: {tweet['toxicity']:.1f}):\n  ```\n  {tweet['tweet']}\n  ```"
+            *[f"- <span style='color: #3498DB'>@{tweet['username']}</span> (toxicity: {tweet['toxicity']:.1f}):\n  ```\n  {tweet['tweet']}\n  ```"
               for tweet in toxic['post_war_toxic']],
             "\n"
         ])
@@ -511,16 +531,26 @@ Provide analysis in this JSON format:
         for metric_key, metric_data in results['metrics_changes'].items():
             report_sections.extend([
                 f"\n**{metric_data['name']}**",
-                f"{metric_data['scale']}", # Show the full scale with both ends
-                "\n",
+                f"{metric_data['scale']}\n",
                 f"**Group Average Change: {metric_data['group_change']:+.1f}**\n",
                 "**Top Changes:**",
-                *[f"- @{user['username']:<12} {user['change']:+.1f} points  │  Pre: {user['pre_val']:.1f}  →  Post: {user['post_val']:.1f}"
+                *[f"- <span style='color: #3498DB'>@{user['username']}</span> <span style='color: {'#2ECC71' if user['change'] >= 0 else '#E74C3C'}'>{user['change']:+.1f} points</span> │ Pre: {user['pre_val']:.1f} → Post: {user['post_val']:.1f}"
                   for user in metric_data['top_changers']],
                 "\n"
             ])
         
-        # 5. Narrative Evolution
+        # Add Entity Changes section with colored entities
+        entity_changes = results['entity_changes']
+        report_sections.extend([
+            "\n### Entity Changes\n",
+            "**Top New Attacked Entities (Post-war):**",
+            *[f"• <span style='color: #3498DB'>{entity}</span>" for entity in entity_changes['new_attacked']],
+            "\n**No Longer Attacked (Pre-war only):**",
+            *[f"• <span style='color: #9B59B6'>{entity}</span>" for entity in entity_changes['no_longer_attacked']],
+            "\n"
+        ])
+        
+        # Continue with Narrative Evolution section
         narratives = results['narrative_analysis']
         report_sections.extend([
             "### Narrative Evolution\n",
@@ -534,3 +564,29 @@ Provide analysis in this JSON format:
         ])
         
         return "\n".join(report_sections), results['figures'] 
+
+    def _format_top_changes(self, changes):
+        """Format the top changes with bullet points and line breaks."""
+        formatted_changes = ["Top Changes:"]
+        for username, change_data in changes:
+            line = f"• @{username}: {change_data['change']:.1f} points │ "
+            line += f"Pre: {change_data['pre']:.1f} → Post: {change_data['post']:.1f}"
+            formatted_changes.append(line)
+        return "\n".join(formatted_changes)
+
+    def _generate_metrics_section(self, results):
+        """Generate the metrics analysis section."""
+        section = []
+        for metric, data in results['metrics'].items():
+            # Add metric header and description
+            section.extend([
+                f"### {data['name']}\n",
+                f"{data['scale']}\n",
+                f"Group average change: {data['avg_change']:.1f} points (Pre: {data['pre_avg']:.1f} → Post: {data['post_avg']:.1f})\n"
+            ])
+            
+            # Add top changes with improved formatting
+            top_changes = self._format_top_changes(data['top_changes'])
+            section.append(f"{top_changes}\n")
+        
+        return section 
