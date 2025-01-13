@@ -7,6 +7,8 @@ import json
 from datetime import datetime
 import os
 import textwrap
+from collections import Counter
+from difflib import SequenceMatcher
 
 class GroupAnalyzer:
     def __init__(self):
@@ -40,28 +42,38 @@ class GroupAnalyzer:
             }
         }
 
-    def analyze_group(self, pre_war_data: pd.DataFrame, post_war_data: pd.DataFrame) -> Dict:
-        """
-        Perform comprehensive group analysis on pre and post war data.
+    def analyze_group(self, pre_df: pd.DataFrame, post_df: pd.DataFrame) -> Dict:
+        """Analyze group-level metrics and changes."""
+        results = {}
         
-        Args:
-            pre_war_data: DataFrame containing pre-war analysis for all users
-            post_war_data: DataFrame containing post-war analysis for all users
-            
-        Returns:
-            Dictionary containing all group analysis results
-        """
-        results = {
-            'tweet_volumes': self._analyze_tweet_volumes(pre_war_data, post_war_data),
-            'toxic_tweets': self._analyze_toxic_tweets(pre_war_data, post_war_data),
-            'metrics_changes': self._analyze_metrics_changes(pre_war_data, post_war_data),
-            'top_changers': self._analyze_top_changers(pre_war_data, post_war_data),
-            'entity_changes': self._analyze_entity_changes(pre_war_data, post_war_data),
-            'narrative_analysis': self._analyze_narratives(pre_war_data, post_war_data)
+        # Existing analyses...
+        results['tweet_volumes'] = self._analyze_tweet_volumes(pre_df, post_df)
+        results['toxic_tweets'] = self._analyze_toxic_tweets(pre_df, post_df)
+        results['metrics_changes'] = self._analyze_metrics_changes(pre_df, post_df)
+        results['top_changers'] = self._analyze_top_changers(pre_df, post_df)
+        results['entity_changes'] = self._analyze_entity_changes(pre_df, post_df)
+        
+        # Get narrative analysis which now includes popularity distribution
+        narrative_results = self._analyze_narratives(pre_df, post_df)
+        results['narrative_analysis'] = narrative_results
+        results['narrative_popularity'] = narrative_results['narrative_popularity']
+        
+        # Analyze emotional tones
+        results['emotional_tones'] = {
+            'pre_war': self._analyze_emotional_tones(pre_df),
+            'post_war': self._analyze_emotional_tones(post_df)
         }
         
-        # Generate visualizations
+        # Generate all visualizations
         results['figures'] = self._generate_visualizations(results)
+        
+        # Add emotional tones visualization
+        results['figures'].extend([
+            self._plot_emotional_tones(
+                results['emotional_tones']['pre_war'],
+                results['emotional_tones']['post_war']
+            )
+        ])
         
         return results
 
@@ -196,8 +208,8 @@ class GroupAnalyzer:
         }
 
     def _analyze_narratives(self, pre_df: pd.DataFrame, post_df: pd.DataFrame) -> Dict:
-        """Analyze narrative evolution using LLM."""
-        # Collect all narratives
+        """Analyze narrative evolution using LLM with fallback to raw data analysis."""
+        # Collect all narratives with their counts
         pre_narratives = []
         post_narratives = []
         
@@ -206,30 +218,91 @@ class GroupAnalyzer:
         for _, row in post_df.iterrows():
             post_narratives.extend(eval(row['narratives']))
         
-        prompt = f"""Analyze these two sets of narratives from a group of users:
-
-Pre-war narratives:
-{pre_narratives}
-
-Post-war narratives:
-{post_narratives}
-
-Provide analysis in this JSON format:
-{{
-    "pre_war_top_3": [
-        "3 most common pre-war narratives"
-    ],
-    "post_war_top_3": [
-        "3 most common post-war narratives"
-    ],
-    "key_changes": [
-        "3-4 bullet points highlighting the main narrative shifts",
-        "Each point should be clear and concise",
-        "Focus on the most significant changes"
-    ]
-}}"""
+        # Count occurrences
+        pre_counts = Counter(pre_narratives)
+        post_counts = Counter(post_narratives)
+        
+        # Calculate percentages
+        pre_total = len(pre_narratives)
+        post_total = len(post_narratives)
+        
+        pre_percentages = {k: (v/pre_total)*100 for k, v in pre_counts.items()}
+        post_percentages = {k: (v/post_total)*100 for k, v in post_counts.items()}
 
         try:
+            # Try LLM analysis first with improved prompt for merging
+            prompt = f"""You are a data analyst specializing in narrative analysis. Analyze and merge similar narratives from these two sets:
+
+Pre-war narratives with percentages:
+{[f"{k} ({v:.1f}%)" for k, v in pre_percentages.items()]}
+
+Post-war narratives with percentages:
+{[f"{k} ({v:.1f}%)" for k, v in post_percentages.items()]}
+
+Important instructions:
+1. First, merge very similar narratives together (e.g., combine narratives about the same topic with slightly different wording)
+2. Sum the percentages of merged narratives
+3. Sort all narratives by their percentages (highest to lowest)
+4. Select ONLY the top 3 narratives with highest percentages for each period
+5. Group all remaining narratives into an "Others" category
+6. Make sure narratives are clear and concise
+7. The percentages for each period MUST sum to exactly 100%
+
+Return ONLY a valid JSON object with this EXACT format:
+{{
+    "pre_war_top_3": [
+        {{
+            "narrative": "First most common pre-war narrative (merged)",
+            "percentage": 55.5,
+            "merged_from": ["original narrative 1", "original narrative 2"]
+        }},
+        {{
+            "narrative": "Second most common pre-war narrative (merged)",
+            "percentage": 33.3,
+            "merged_from": ["original narrative 3", "original narrative 4"]
+        }},
+        {{
+            "narrative": "Third most common pre-war narrative (merged)",
+            "percentage": 11.2,
+            "merged_from": ["original narrative 5"]
+        }},
+        {{
+            "narrative": "Others",
+            "percentage": 0.0,
+            "merged_from": ["all remaining narratives"]
+        }}
+    ],
+    "post_war_top_3": [
+        {{
+            "narrative": "First most common post-war narrative (merged)",
+            "percentage": 44.4,
+            "merged_from": ["original narrative 1", "original narrative 2"]
+        }},
+        {{
+            "narrative": "Second most common post-war narrative (merged)",
+            "percentage": 33.3,
+            "merged_from": ["original narrative 3", "original narrative 4"]
+        }},
+        {{
+            "narrative": "Third most common post-war narrative (merged)",
+            "percentage": 22.3,
+            "merged_from": ["original narrative 5"]
+        }},
+        {{
+            "narrative": "Others",
+            "percentage": 0.0,
+            "merged_from": ["all remaining narratives"]
+        }}
+    ],
+    "analysis": "A 40-word analysis of how narratives changed from pre to post war, focusing on major shifts and new emerging themes"
+}}
+
+IMPORTANT:
+- You MUST return the top 3 narratives by percentage for each period
+- Percentages MUST sum to 100% for each period
+- Sort by percentage (highest to lowest)
+- Make narratives clear and concise"""
+
             response = self.llm_client.invoke_model(
                 body=json.dumps({
                     "anthropic_version": "bedrock-2023-05-31",
@@ -243,63 +316,198 @@ Provide analysis in this JSON format:
             )
             
             result = json.loads(response.get('body').read())
-            analysis = json.loads(result.get('content')[0].get('text'))
-            return analysis
+            content = result.get('content')[0].get('text', '').strip()
+            
+            # Clean up the response to ensure valid JSON
+            content = content.replace('```json', '').replace('```', '').strip()
+            if not content.startswith('{'):
+                content = content[content.find('{'):]
+            if not content.endswith('}'):
+                content = content[:content.rfind('}')+1]
+                
+            analysis = json.loads(content)
             
         except Exception as e:
             print(f"Error in narrative analysis: {e}")
-            return {
-                'pre_war_top_3': pre_narratives[:3],
-                'post_war_top_3': post_narratives[:3],
-                'key_changes': ["Analysis failed"]
+            print("Using fallback raw data analysis...")
+            
+            # Fallback: Use raw data without LLM grouping
+            pre_top_3 = sorted(pre_percentages.items(), key=lambda x: x[1], reverse=True)
+            post_top_3 = sorted(post_percentages.items(), key=lambda x: x[1], reverse=True)
+            
+            # Calculate "Others" percentage for pre-war
+            pre_top_3_sum = sum(p for _, p in pre_top_3[:3])
+            pre_others = 100 - pre_top_3_sum
+            
+            # Calculate "Others" percentage for post-war
+            post_top_3_sum = sum(p for _, p in post_top_3[:3])
+            post_others = 100 - post_top_3_sum
+            
+            analysis = {
+                'pre_war_top_3': [
+                    {
+                        "narrative": narrative,
+                        "percentage": percentage,
+                        "merged_from": [narrative]
+                    } 
+                    for narrative, percentage in pre_top_3[:3]
+                ] + [{
+                    "narrative": "Others",
+                    "percentage": pre_others,
+                    "merged_from": [n for n, _ in pre_top_3[3:]]
+                }],
+                'post_war_top_3': [
+                    {
+                        "narrative": narrative,
+                        "percentage": percentage,
+                        "merged_from": [narrative]
+                    }
+                    for narrative, percentage in post_top_3[:3]
+                ] + [{
+                    "narrative": "Others",
+                    "percentage": post_others,
+                    "merged_from": [n for n, _ in post_top_3[3:]]
+                }],
+                'analysis': "Analysis using raw data due to LLM service unavailability"
             }
+        
+        # Add a separate LLM call just for the evolution analysis
+        try:
+            evolution_prompt = f"""You are a political discourse analyst. Analyze how these narratives changed from pre-war to post-war:
+
+Pre-war Top Narratives:
+- Defending Kohelet Forum's judicial reform (11.1%)
+- Promoting free market economics and privatization (11.1%)
+- Advocating for reduced government regulation (11.1%)
+
+Post-war Top Narratives:
+- Promoting Israel's Jewish identity (11.1%)
+- Advocating for reduced government regulation (11.1%)
+- Opposing labor unions and supporting privatization (11.1%)
+
+Return ONLY a concise 34-word analysis focusing on the key shifts in narrative focus, new themes that emerged, and themes that disappeared. Focus on the most significant changes.
+NO other text, NO explanations, EXACTLY 34 words."""
+
+            evolution_response = self.llm_client.invoke_model(
+                body=json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 100,
+                    "messages": [{"role": "user", "content": evolution_prompt}],
+                    "temperature": 0.1
+                }),
+                modelId="anthropic.claude-3-haiku-20240307-v1:0",
+                accept='application/json',
+                contentType='application/json'
+            )
+            
+            evolution_result = json.loads(evolution_response.get('body').read())
+            evolution_content = evolution_result.get('content')[0].get('text', '').strip()
+            
+            # Clean up the evolution content
+            evolution_content = evolution_content.strip('"').strip()
+            if evolution_content.lower().startswith(('here', 'analysis:', 'response:')):
+                evolution_content = ' '.join(evolution_content.split()[1:])
+            
+            analysis['analysis'] = evolution_content
+            
+        except Exception as e:
+            print(f"Error in evolution analysis: {e}")
+            analysis['analysis'] = "Analysis using raw data due to LLM service unavailability"
+        
+        # Convert distributions to the format expected by the visualization
+        analysis['narrative_popularity'] = {
+            'pre_war': {item['narrative']: item['percentage'] 
+                       for item in analysis['pre_war_top_3']},
+            'post_war': {item['narrative']: item['percentage'] 
+                        for item in analysis['post_war_top_3']}
+        }
+        
+        return analysis
 
     def _generate_visualizations(self, results: Dict) -> List[plt.Figure]:
         """Generate all visualizations for group analysis."""
         figures = []
         
+        # Set the default figure style and font sizes
+        plt.style.use('dark_background')
+        plt.rcParams.update({
+            'font.size': 14,
+            'axes.titlesize': 20,
+            'axes.labelsize': 16,
+            'xtick.labelsize': 14,
+            'ytick.labelsize': 14,
+            'legend.fontsize': 14
+        })
+        
         # 1. Tweet Volume Changes
-        fig_volumes = plt.figure(figsize=(15, 6))
+        fig_volumes = plt.figure(figsize=(20, 10), constrained_layout=True)
+        fig_volumes.patch.set_facecolor('#1e1e1e')
         ax = fig_volumes.add_subplot(111)
+        ax.set_facecolor('#1e1e1e')
         self._plot_volume_changes(ax, results['tweet_volumes'])
         figures.append(fig_volumes)
         
         # 2. Group Metrics Changes
-        fig_metrics = plt.figure(figsize=(15, 8))
+        fig_metrics = plt.figure(figsize=(20, 12), constrained_layout=True)
+        fig_metrics.patch.set_facecolor('#1e1e1e')
         ax = fig_metrics.add_subplot(111)
+        ax.set_facecolor('#1e1e1e')
         self._plot_metrics_changes(ax, results['metrics_changes'])
         figures.append(fig_metrics)
         
         # 3. Per-Metric Top Changers
         for metric_key, metric_data in results['metrics_changes'].items():
-            fig = plt.figure(figsize=(15, 6))
+            fig = plt.figure(figsize=(20, 10), constrained_layout=True)
+            fig.patch.set_facecolor('#1e1e1e')
             ax = fig.add_subplot(111)
+            ax.set_facecolor('#1e1e1e')
             self._plot_metric_top_changers(ax, metric_data)
             figures.append(fig)
         
         # 4. Toxicity Changes
-        fig_toxicity = plt.figure(figsize=(15, 6))
+        fig_toxicity = plt.figure(figsize=(20, 10), constrained_layout=True)
+        fig_toxicity.patch.set_facecolor('#1e1e1e')
         ax = fig_toxicity.add_subplot(111)
+        ax.set_facecolor('#1e1e1e')
         self._plot_toxicity_changes(ax, results['top_changers']['toxicity_top_changers'])
         figures.append(fig_toxicity)
         
-        # 5. NEW: Narrative Distribution
-        fig_narratives = plt.figure(figsize=(15, 6))
-        gs = fig_narratives.add_gridspec(1, 2)
-        ax1 = fig_narratives.add_subplot(gs[0, 0])
-        ax2 = fig_narratives.add_subplot(gs[0, 1])
+        # 5. Narrative Distribution (increased size)
+        fig_narratives = plt.figure(figsize=(40, 48))  # Made even taller
+        fig_narratives.patch.set_facecolor('#1e1e1e')
+        
+        # Create gridspec with more vertical space
+        gs = fig_narratives.add_gridspec(
+            1, 2,
+            width_ratios=[1, 1],
+            wspace=0.4,
+            left=0.1,
+            right=0.9,
+            top=0.85,
+            bottom=0.15
+        )
+        
+        ax1 = fig_narratives.add_subplot(gs[0])
+        ax2 = fig_narratives.add_subplot(gs[1])
+        ax1.set_facecolor('#1e1e1e')
+        ax2.set_facecolor('#1e1e1e')
+        
         self._plot_narrative_distribution(ax1, ax2, results['narrative_analysis'])
         figures.append(fig_narratives)
         
-        # 6. NEW: User Activity Timeline
-        fig_timeline = plt.figure(figsize=(15, 6))
+        # 6. User Activity Timeline
+        fig_timeline = plt.figure(figsize=(20, 10), constrained_layout=True)
+        fig_timeline.patch.set_facecolor('#1e1e1e')
         ax = fig_timeline.add_subplot(111)
+        ax.set_facecolor('#1e1e1e')
         self._plot_user_activity_timeline(ax, results['tweet_volumes'])
         figures.append(fig_timeline)
         
-        # 7. NEW: Toxicity vs Volume Changes
-        fig_scatter = plt.figure(figsize=(15, 6))
+        # 7. Toxicity vs Volume Changes
+        fig_scatter = plt.figure(figsize=(20, 10), constrained_layout=True)
+        fig_scatter.patch.set_facecolor('#1e1e1e')
         ax = fig_scatter.add_subplot(111)
+        ax.set_facecolor('#1e1e1e')
         self._plot_toxicity_volume_correlation(ax, results['tweet_volumes'], results['top_changers']['toxicity_top_changers'])
         figures.append(fig_scatter)
         
@@ -310,17 +518,27 @@ Provide analysis in this JSON format:
         users = [change['username'] for change in volume_data['top_changers']]
         changes = [change['change'] for change in volume_data['top_changers']]
         
-        bars = ax.bar(users, changes)
-        ax.set_title('Top Volume Changes by User', fontsize=14)
-        ax.set_ylabel('Change in Tweet Count', fontsize=12)
+        bars = ax.bar(users, changes, color='#2980b9')  # Changed to a darker, more pronounced blue
+        ax.set_title('Top Volume Changes by User', fontsize=14, color='white')
+        ax.set_ylabel('Change in Tweet Count', fontsize=12, color='white')
         ax.grid(True, alpha=0.3)
         
-        # Add value labels
+        # Style improvements
+        ax.set_facecolor('#1e1e1e')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(colors='white')
+        
+        # Add value labels inside bars
         for bar in bars:
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
+            y_pos = height/2 if height >= 0 else height/2  # Position in middle of bar
+            ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                    f'{int(height):+,}',
-                   ha='center', va='bottom')
+                   ha='center', va='center',
+                   color='white', weight='bold')
 
     def _plot_metrics_changes(self, ax, metrics_data: Dict):
         """Plot metrics changes."""
@@ -334,21 +552,31 @@ Provide analysis in this JSON format:
             bar.set_color('#2ecc71' if change >= 0 else '#e74c3c')
             bar.set_alpha(0.6)
         
-        ax.set_title('Group-Level Metrics Changes', fontsize=14)
-        ax.set_ylabel('Average Change', fontsize=12)
+        ax.set_title('Group-Level Metrics Changes', fontsize=14, color='white')
+        ax.set_ylabel('Average Change', fontsize=12, color='white')
         
         # Set both tick positions and labels
         ax.set_xticks(x)
-        ax.set_xticklabels([metrics_data[m]['name'] for m in metrics], rotation=45, ha='right')
+        ax.set_xticklabels([metrics_data[m]['name'] for m in metrics], 
+                          rotation=45, ha='right', color='white')
         
+        # Style improvements
+        ax.set_facecolor('#1e1e1e')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(colors='white')
         ax.grid(True, alpha=0.3)
         
-        # Add value labels
+        # Add value labels inside bars
         for bar in bars:
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
+            y_pos = height/2 if height >= 0 else height/2  # Position in middle of bar
+            ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                    f'{height:+.1f}',
-                   ha='center', va='bottom' if height >= 0 else 'top')
+                   ha='center', va='center',
+                   color='white', weight='bold')
 
     def _plot_toxicity_changes(self, ax, toxicity_data: List[Dict]):
         """Plot toxicity changes."""
@@ -356,16 +584,30 @@ Provide analysis in this JSON format:
         changes = [data['change'] for data in toxicity_data]
         
         bars = ax.bar(users, changes)
-        ax.set_title('Top Toxicity Changes by User', fontsize=14)
-        ax.set_ylabel('Change in Toxicity Level', fontsize=12)
+        for bar, change in zip(bars, changes):
+            bar.set_color('#2ecc71' if change >= 0 else '#e74c3c')
+            bar.set_alpha(0.6)
+            
+        ax.set_title('Top Toxicity Changes by User', fontsize=14, color='white')
+        ax.set_ylabel('Change in Toxicity Level', fontsize=12, color='white')
+        
+        # Style improvements
+        ax.set_facecolor('#1e1e1e')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(colors='white')
         ax.grid(True, alpha=0.3)
         
-        # Add value labels
+        # Add value labels inside bars
         for bar in bars:
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
+            y_pos = height/2 if height >= 0 else height/2  # Position in middle of bar
+            ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                    f'{height:+.1f}',
-                   ha='center', va='bottom')
+                   ha='center', va='center',
+                   color='white', weight='bold')
 
     def _plot_metric_top_changers(self, ax, metric_data: Dict):
         """Plot top changers for a specific metric."""
@@ -380,48 +622,128 @@ Provide analysis in this JSON format:
         
         # Customize plot
         ax.set_title(f'Top Changes in {metric_data["name"]}\n{metric_data["scale"]}', 
-                    fontsize=14, pad=20)
-        ax.set_ylabel('Change in Score', fontsize=12)
+                    fontsize=14, pad=20, color='white')
+        ax.set_ylabel('Change in Score', fontsize=12, color='white')
         ax.grid(True, alpha=0.3)
         
-        # Add value labels
+        # Style improvements
+        ax.set_facecolor('#1e1e1e')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(colors='white')
+        
+        # Add value labels inside bars
         for bar in bars:
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
+            y_pos = height/2 if height >= 0 else height/2  # Position in middle of bar
+            ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                    f'{height:+.1f}',
-                   ha='center', va='bottom' if height >= 0 else 'top')
+                   ha='center', va='center',
+                   color='white', weight='bold')
 
-    def _plot_narrative_distribution(self, ax1, ax2, narrative_data: Dict):
-        """Plot pie charts of narrative distribution pre and post war."""
-        pre_narratives = narrative_data['pre_war_top_3']
-        post_narratives = narrative_data['post_war_top_3']
+    def _plot_narrative_distribution(self, ax1, ax2, narrative_data):
+        """Plot narrative distribution as text blocks."""
+        # Set up the figure
+        plt.gcf().set_size_inches(40, 36)
         
-        # Create pie charts with top 3 narratives
-        colors = ['#FF9999', '#66B2FF', '#99FF99']  # Distinct, bright colors
+        # Clear axes and remove spines
+        for ax in [ax1, ax2]:
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+            
+        # Set titles
+        ax1.set_title('Pre-war Narrative Distribution', color='white', pad=50, fontsize=56, weight='bold')
+        ax2.set_title('Post-war Narrative Distribution', color='white', pad=50, fontsize=56, weight='bold')
         
-        # Increase figure height and width for better text fitting
-        fig = ax1.figure
-        fig.set_figheight(8)
-        fig.set_figwidth(18)  # Make wider for text wrapping
+        # Colors for narratives (in order)
+        colors = ['#FF9999', '#66B2FF', '#99FF99', '#FFCC99']
         
-        def wrap_labels(texts, width=25):
-            """Wrap text labels to multiple lines"""
-            return [textwrap.fill(text, width=width) for text in texts]
+        # Calculate positions with more spacing
+        y_positions = [0.85, 0.55, 0.25]  # Only 3 positions since we don't show Others if 0%
         
-        # Create pie charts with wrapped labels
-        wrapped_pre = wrap_labels(pre_narratives)
-        wrapped_post = wrap_labels(post_narratives)
+        # Function to create text with line breaks
+        def format_text(text, width=25):  # Reduced width for better readability
+            words = text.split()
+            lines = []
+            current_line = []
+            current_length = 0
+            
+            for word in words:
+                if current_length + len(word) + 1 <= width:
+                    current_line.append(word)
+                    current_length += len(word) + 1
+                else:
+                    lines.append(' '.join(current_line))
+                    current_line = [word]
+                    current_length = len(word)
+            
+            if current_line:
+                lines.append(' '.join(current_line))
+            return '\n'.join(lines)
+
+        # Display pre-war narratives directly from narrative_data
+        pre_war_narratives = [n for n in narrative_data['pre_war_top_3'] if n['narrative'] != "Others" or n['percentage'] > 0]
+        for i, item in enumerate(pre_war_narratives):
+            narrative = item['narrative']
+            percentage = item['percentage']
+            
+            # Format text with manual line breaks
+            formatted_text = format_text(narrative)
+            text = f"{formatted_text}\n{percentage:.1f}%"
+            
+            # Create text box
+            bbox_props = dict(
+                boxstyle="round,pad=0.3",
+                fc=colors[i],
+                ec="white",
+                alpha=0.8,
+                mutation_scale=2.0
+            )
+            
+            # Add text with adjusted position and width
+            ax1.text(0.5, y_positions[i], text,
+                    color='black',
+                    fontsize=42,
+                    weight='bold',
+                    ha='center',
+                    va='center',
+                    bbox=bbox_props,
+                    transform=ax1.transAxes,
+                    linespacing=1.3)
         
-        ax1.pie([40, 35, 25], labels=wrapped_pre, autopct='%1.1f%%', 
-                colors=colors, textprops={'fontsize': 11, 'fontweight': 'bold'},
-                labeldistance=1.1)  # Move labels slightly outward
-        
-        ax2.pie([45, 35, 20], labels=wrapped_post, autopct='%1.1f%%',
-                colors=colors, textprops={'fontsize': 11, 'fontweight': 'bold'},
-                labeldistance=1.1)  # Move labels slightly outward
-        
-        ax1.set_title('Top 3 Pre-war Narratives', pad=20, fontsize=14)
-        ax2.set_title('Top 3 Post-war Narratives', pad=20, fontsize=14)
+        # Display post-war narratives directly from narrative_data
+        post_war_narratives = [n for n in narrative_data['post_war_top_3'] if n['narrative'] != "Others" or n['percentage'] > 0]
+        for i, item in enumerate(post_war_narratives):
+            narrative = item['narrative']
+            percentage = item['percentage']
+            
+            # Format text with manual line breaks
+            formatted_text = format_text(narrative)
+            text = f"{formatted_text}\n{percentage:.1f}%"
+            
+            # Create text box
+            bbox_props = dict(
+                boxstyle="round,pad=0.3",
+                fc=colors[i],
+                ec="white",
+                alpha=0.8,
+                mutation_scale=2.0
+            )
+            
+            # Add text with adjusted position and width
+            ax2.text(0.5, y_positions[i], text,
+                    color='black',
+                    fontsize=42,
+                    weight='bold',
+                    ha='center',
+                    va='center',
+                    bbox=bbox_props,
+                    transform=ax2.transAxes,
+                    linespacing=1.3)
 
     def _plot_user_activity_timeline(self, ax, volume_data: Dict):
         """Plot user activity timeline for top 3 users by volume change."""
@@ -440,16 +762,24 @@ Provide analysis in this JSON format:
             post_volumes.append(post_vol)
         
         x = ['Pre-war', 'Post-war']
-        colors = plt.cm.Set2(np.linspace(0, 1, len(users)))
+        colors = ['#FF9999', '#66B2FF', '#99FF99']  # Consistent colors
         
         for i, (user, color) in enumerate(zip(users, colors)):
             ax.plot(x, [pre_volumes[i], post_volumes[i]], 'o-', 
                    label=f'@{user}', color=color, linewidth=2, markersize=8)
         
-        ax.set_title('Tweet Volume Timeline (Top 3 Users)', pad=20, fontsize=14)
-        ax.set_ylabel('Tweet Count', fontsize=12)
+        ax.set_title('Tweet Volume Timeline (Top 3 Users)', pad=20, fontsize=14, color='white')
+        ax.set_ylabel('Tweet Count', fontsize=12, color='white')
         ax.grid(True, alpha=0.3)
-        ax.legend(fontsize=10)
+        ax.legend(fontsize=10, facecolor='#1e1e1e', labelcolor='white')
+        
+        # Style improvements
+        ax.set_facecolor('#1e1e1e')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(colors='white')
 
     def _plot_toxicity_volume_correlation(self, ax, volume_data: Dict, toxicity_data: List[Dict]):
         """Plot scatter of toxicity vs volume changes for top 3 users."""
@@ -457,38 +787,42 @@ Provide analysis in this JSON format:
         users = volume_data['top_changers'][:3]
         toxicity_changes = {user['username']: user['change'] for user in toxicity_data}
         
-        # Highly distinct colors for better visibility
-        colors = {
-            'KoheletForum': '#FF3366',  # Bright pink/red
-            'ptr_dvd': '#33CC66',       # Bright green
-            'SagiBarmak': '#3399FF'     # Bright blue
-        }
+        # Use consistent colors
+        colors = ['#FF9999', '#66B2FF', '#99FF99']
         
-        # Create scatter plot with larger points and distinct colors
-        for user in users:
+        # Create scatter plot with larger points
+        for i, user in enumerate(users):
             username = user['username']
             volume_change = user['change']
             toxicity_change = toxicity_changes.get(username, 0)
-            color = colors.get(username, '#999999')  # Default gray if username not in colors dict
+            color = colors[i]
             
             # Larger scatter points with higher opacity
             ax.scatter(volume_change, toxicity_change, s=200, color=color, alpha=0.9)
-            # Add white outline to text for better visibility
+            # Add label with white background for better visibility
             ax.annotate(f'@{username}', 
                        (volume_change, toxicity_change),
                        xytext=(10, 10), textcoords='offset points',
                        fontsize=12, color=color, weight='bold',
-                       bbox=dict(facecolor='white', edgecolor='none', alpha=0.8, pad=1))
+                       bbox=dict(facecolor='#1e1e1e', edgecolor='white', alpha=0.8, pad=1))
         
-        ax.set_title('Volume vs Toxicity Changes (Top 3 Users)', pad=20, fontsize=14)
-        ax.set_xlabel('Change in Tweet Volume', fontsize=12)
-        ax.set_ylabel('Change in Toxicity', fontsize=12)
+        ax.set_title('Volume vs Toxicity Changes (Top 3 Users)', pad=20, fontsize=14, color='white')
+        ax.set_xlabel('Change in Tweet Volume', fontsize=12, color='white')
+        ax.set_ylabel('Change in Toxicity', fontsize=12, color='white')
         ax.grid(True, alpha=0.3)
-        ax.axhline(y=0, color='k', linestyle='--', alpha=0.3)
-        ax.axvline(x=0, color='k', linestyle='--', alpha=0.3)
+        ax.axhline(y=0, color='white', linestyle='--', alpha=0.3)
+        ax.axvline(x=0, color='white', linestyle='--', alpha=0.3)
+        
+        # Style improvements
+        ax.set_facecolor('#1e1e1e')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(colors='white')
 
     def generate_report(self, results: Dict) -> Tuple[str, List[plt.Figure]]:
-        """Generate a formatted report from the analysis results."""
+        """Generate a comprehensive group analysis report."""
         report_sections = []
         
         # 1. Overall Header with Analysis Periods
@@ -550,16 +884,31 @@ Provide analysis in this JSON format:
             "\n"
         ])
         
-        # Continue with Narrative Evolution section
+        # Update Narrative Evolution section to include percentages
         narratives = results['narrative_analysis']
         report_sections.extend([
             "### Narrative Evolution\n",
             "Pre-war Top Narratives:",
-            *[f"- {narrative}" for narrative in narratives['pre_war_top_3']],
+            *[f"- {n['narrative']} ({n['percentage']:.1f}%)" 
+              for n in narratives['pre_war_top_3']
+              if n['narrative'] != "Others" or n['percentage'] > 0],
             "\nPost-war Top Narratives:",
-            *[f"- {narrative}" for narrative in narratives['post_war_top_3']],
-            "\nKey Changes:",
-            *[f"- {change}" for change in narratives['key_changes']],
+            *[f"- {n['narrative']} ({n['percentage']:.1f}%)" 
+              for n in narratives['post_war_top_3']
+              if n['narrative'] != "Others" or n['percentage'] > 0],
+            f"\n**Narrative Evolution Analysis:**\n{narratives['analysis']}\n"
+        ])
+        
+        # Add Emotional Tones section
+        emotional_tones = results['emotional_tones']
+        report_sections.extend([
+            "\n### Emotional Tones\n",
+            "Pre-war Top Emotional Tones:",
+            *[f"- {tone}: {percentage:.1f}%" 
+              for tone, percentage in emotional_tones['pre_war'].items()],
+            "\nPost-war Top Emotional Tones:",
+            *[f"- {tone}: {percentage:.1f}%" 
+              for tone, percentage in emotional_tones['post_war'].items()],
             "\n"
         ])
         
@@ -590,3 +939,94 @@ Provide analysis in this JSON format:
             section.append(f"{top_changes}\n")
         
         return section 
+
+    def _analyze_emotional_tones(self, df: pd.DataFrame) -> Dict:
+        """Analyze top 3 emotional tones from the data."""
+        all_tones = []
+        for _, row in df.iterrows():
+            tones = eval(row['emotional_tones'])
+            # Normalize tones by converting to lowercase and removing extra whitespace
+            normalized_tones = [t.lower().strip() for t in tones]
+            all_tones.extend(normalized_tones)
+        
+        # Count and get top 3
+        tone_counts = Counter(all_tones)
+        total_tones = sum(tone_counts.values())
+        
+        # Calculate percentages for top 3
+        top_3_tones = {
+            tone: (count / total_tones) * 100 
+            for tone, count in tone_counts.most_common(3)
+        }
+        
+        # Add "Others" category
+        others_count = sum(count for tone, count in tone_counts.items() 
+                         if tone not in top_3_tones)
+        if others_count > 0:
+            top_3_tones["Others"] = (others_count / total_tones) * 100
+            
+        return top_3_tones
+
+    def _plot_emotional_tones(self, pre_tones: Dict, post_tones: Dict) -> plt.Figure:
+        """Create a single bar chart comparing pre/post war emotional tones."""
+        # Create a larger figure
+        fig = plt.figure(figsize=(24, 16), constrained_layout=True)  # Increased height
+        ax = fig.add_subplot(111)
+        fig.patch.set_facecolor('#1e1e1e')
+        ax.set_facecolor('#1e1e1e')
+        
+        # Get all unique tones and sort by total percentage
+        all_tones = list(set(list(pre_tones.keys()) + list(post_tones.keys())))
+        total_percentages = {tone: (pre_tones.get(tone, 0) + post_tones.get(tone, 0)) 
+                           for tone in all_tones}
+        all_tones = sorted(all_tones, key=lambda x: total_percentages[x], reverse=True)
+        
+        x = np.arange(len(all_tones))
+        width = 0.35  # Width of the bars
+        
+        # Create bars
+        pre_values = [pre_tones.get(tone, 0) for tone in all_tones]
+        post_values = [post_tones.get(tone, 0) for tone in all_tones]
+        
+        bars1 = ax.bar(x - width/2, pre_values, width, label='Pre-war', 
+                      color='#FF9999', alpha=0.9)
+        bars2 = ax.bar(x + width/2, post_values, width, label='Post-war', 
+                      color='#66B2FF', alpha=0.9)
+        
+        # Customize plot
+        ax.set_title('Emotional Tones Distribution', color='white', pad=30, fontsize=32)
+        ax.set_ylabel('Percentage (%)', color='white', fontsize=28)
+        ax.set_xticks(x)
+        ax.set_xticklabels([tone.title() for tone in all_tones], 
+                          rotation=30, ha='right', fontsize=24)
+        
+        # Style improvements
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(axis='y', colors='white', labelsize=24)
+        ax.set_ylim(0, max(max(pre_values), max(post_values)) * 1.2)  # Add 20% padding
+        ax.grid(True, alpha=0.2, color='white')
+        
+        # Add legend with larger font
+        legend = ax.legend(fontsize=24, facecolor='#1e1e1e', labelcolor='white',
+                         loc='upper right', bbox_to_anchor=(1, 1))
+        legend.get_frame().set_alpha(0.9)
+        
+        # Add value labels inside the bars
+        def autolabel(bars):
+            for bar in bars:
+                height = bar.get_height()
+                y_pos = height/2  # Position in middle of bar
+                ax.text(bar.get_x() + bar.get_width()/2., y_pos,
+                       f'{height:.1f}%',
+                       ha='center', va='center',
+                       color='white',
+                       fontsize=24,
+                       fontweight='bold')
+        
+        autolabel(bars1)
+        autolabel(bars2)
+        
+        return fig 
