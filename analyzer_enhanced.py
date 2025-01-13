@@ -220,6 +220,7 @@ Respond in this JSON format:
             # Get all tweets for this user from the tweets DataFrame
             if tweets_df is not None:
                 user_tweets = tweets_df[tweets_df['author_username'] == username].to_dict('records')
+                total_tweets = len(user_tweets)  # Get total tweet count
             else:
                 print(f"Warning: No tweets DataFrame provided for {username}")
                 continue
@@ -240,7 +241,8 @@ Respond in this JSON format:
                 
                 # Flatten the metrics structure for DataFrame compatibility
                 flattened_metrics = {
-                    'username': username
+                    'username': username,
+                    'total_tweets': total_tweets  # Store total tweet count
                 }
                 
                 for metric in ['judicial_security_ratio', 'rights_security_balance', 
