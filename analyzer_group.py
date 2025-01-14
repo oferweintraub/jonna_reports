@@ -15,7 +15,7 @@ class GroupAnalyzer:
         """Initialize the group analyzer with AWS client for LLM analysis."""
         self.llm_client = boto3.client(
             service_name='bedrock-runtime',
-            region_name='us-east-1'
+            region_name='us-west-2'
         )
         
         # Define metrics for analysis with detailed descriptions
@@ -44,6 +44,15 @@ class GroupAnalyzer:
 
     def analyze_group(self, pre_df: pd.DataFrame, post_df: pd.DataFrame) -> Dict:
         """Analyze group-level metrics and changes."""
+        # Filter users with at least 30 tweets in each period
+        users_pre_30 = set(pre_df[pre_df['total_tweets'] >= 30]['username'])
+        users_post_30 = set(post_df[post_df['total_tweets'] >= 30]['username'])
+        users_with_30_tweets = users_pre_30.intersection(users_post_30)
+        
+        # Filter dataframes to only include users with sufficient tweets
+        pre_df = pre_df[pre_df['username'].isin(users_with_30_tweets)]
+        post_df = post_df[post_df['username'].isin(users_with_30_tweets)]
+        
         results = {}
         
         # Existing analyses...
@@ -115,12 +124,12 @@ class GroupAnalyzer:
                 'pct_change': pct_change
             })
         
-        # Sort and get top 3 changers by absolute change
+        # Sort and get top 5 changers by absolute change
         volumes['top_changers'] = sorted(
             volume_changes, 
             key=lambda x: abs(x['change']), 
             reverse=True
-        )[:3]
+        )[:5]
         
         return volumes
 
@@ -186,12 +195,12 @@ class GroupAnalyzer:
                     print(f"Warning: Could not process metric {metric_key} for user {username}: {e}")
                     continue
             
-            # Sort and get top 3 changers by absolute change
+            # Sort and get top 5 changers by absolute change
             top_changers = sorted(
                 user_changes,
                 key=lambda x: abs(x['change']),
                 reverse=True
-            )[:3] if user_changes else []
+            )[:5] if user_changes else []
             
             metrics_analysis[metric_key] = {
                 'name': metric_info['name'],
@@ -227,12 +236,12 @@ class GroupAnalyzer:
                 print(f"Warning: Could not process toxicity for user {username}: {e}")
                 continue
         
-        # Sort and get top 3 changers by absolute change
+        # Sort and get top 5 changers by absolute change
         top_changers = sorted(
             toxicity_changes,
             key=lambda x: abs(x['change']),
             reverse=True
-        )[:3] if toxicity_changes else []
+        )[:5] if toxicity_changes else []
         
         return {
             'toxicity_top_changers': top_changers
@@ -281,7 +290,19 @@ class GroupAnalyzer:
 
         try:
             # Try LLM analysis first with improved prompt for merging
-            prompt = f"""You are a data analyst specializing in narrative analysis. Analyze and merge similar narratives from these two sets:
+            print("\nAttempting LLM narrative analysis...")
+            
+            prompt = f"""You are a data analyst specializing in narrative analysis. First, understand this important context:
+
+Context about Kohelet Forum:
+Kohelet Forum is an influential Israeli think tank established in 2012, self-defined as "non-partisan" but widely associated with Jewish nationalism and free-market principles. It gained significant attention for:
+- Leading role in designing and promoting the 2023 judicial reform, which sparked massive protests
+- Promoting free-market economics and limited government intervention
+- Facing controversy over transparency and foreign funding
+- Experiencing major changes in 2024 including loss of funding and staff reductions
+- Being criticized for its stance on public housing, workers' rights, and minimum wage
+
+Analyze these two sets of narratives to identify which remained consistent and which changed between periods, considering Kohelet Forum's role and evolution:
 
 Pre-war narratives with percentages:
 {[f"{k} ({v:.1f}%)" for k, v in pre_percentages.items()]}
@@ -292,75 +313,71 @@ Post-war narratives with percentages:
 Important instructions:
 1. First, merge very similar narratives together (e.g., combine narratives about the same topic with slightly different wording)
 2. Sum the percentages of merged narratives
-3. Sort all narratives by their percentages (highest to lowest)
-4. Select ONLY the top 3 narratives with highest percentages for each period
-5. Group all remaining narratives into an "Others" category
-6. Make sure narratives are clear and concise
-7. The percentages for each period MUST sum to exactly 100%
+3. Identify:
+   a) The 2 most common narratives that remained consistent between pre and post war (similar themes/focus)
+   b) The 3 most significant narratives that changed (either disappeared, emerged, or significantly transformed)
+4. Make sure narratives are clear and concise
+5. Consider how narratives relate to Kohelet Forum's evolution and role
+6. The percentages for each period MUST sum to exactly 100%
 
 Return ONLY a valid JSON object with this EXACT format:
 {{
-    "pre_war_top_3": [
+    "consistent_narratives": [
         {{
-            "narrative": "First most common pre-war narrative (merged)",
-            "percentage": 55.5,
+            "narrative": "First consistent narrative across both periods",
+            "pre_war_percentage": 33.3,
+            "post_war_percentage": 30.0,
             "merged_from": ["original narrative 1", "original narrative 2"]
         }},
         {{
-            "narrative": "Second most common pre-war narrative (merged)",
-            "percentage": 33.3,
+            "narrative": "Second consistent narrative across both periods",
+            "pre_war_percentage": 22.2,
+            "post_war_percentage": 25.0,
             "merged_from": ["original narrative 3", "original narrative 4"]
-        }},
-        {{
-            "narrative": "Third most common pre-war narrative (merged)",
-            "percentage": 11.2,
-            "merged_from": ["original narrative 5"]
-        }},
-        {{
-            "narrative": "Others",
-            "percentage": 0.0,
-            "merged_from": ["all remaining narratives"]
         }}
     ],
-    "post_war_top_3": [
+    "changed_narratives": [
         {{
-            "narrative": "First most common post-war narrative (merged)",
-            "percentage": 44.4,
-            "merged_from": ["original narrative 1", "original narrative 2"]
+            "narrative": "First changed/new/disappeared narrative",
+            "pre_war_percentage": 25.5,
+            "post_war_percentage": 0.0,
+            "change_type": "disappeared",
+            "merged_from": ["original narrative 5", "original narrative 6"]
         }},
         {{
-            "narrative": "Second most common post-war narrative (merged)",
-            "percentage": 33.3,
-            "merged_from": ["original narrative 3", "original narrative 4"]
+            "narrative": "Second changed/new/disappeared narrative",
+            "pre_war_percentage": 0.0,
+            "post_war_percentage": 30.0,
+            "change_type": "emerged",
+            "merged_from": ["original narrative 7"]
         }},
         {{
-            "narrative": "Third most common post-war narrative (merged)",
-            "percentage": 22.3,
-            "merged_from": ["original narrative 5"]
-        }},
-        {{
-            "narrative": "Others",
-            "percentage": 0.0,
-            "merged_from": ["all remaining narratives"]
+            "narrative": "Third changed/new/disappeared narrative",
+            "pre_war_percentage": 19.0,
+            "post_war_percentage": 15.0,
+            "change_type": "transformed",
+            "merged_from": ["original narrative 8", "original narrative 9"]
         }}
     ],
-    "analysis": "A 40-word analysis of how narratives changed from pre to post war, focusing on major shifts and new emerging themes"
+    "analysis": "A 34-word analysis of how narratives evolved, focusing on the persistence of consistent themes and the nature of narrative changes in light of Kohelet Forum's role and evolution."
 }}
 
 IMPORTANT:
-- You MUST return the top 3 narratives by percentage for each period
+- You MUST identify exactly 2 consistent narratives and 3 changed narratives
 - Percentages MUST sum to 100% for each period
-- Sort by percentage (highest to lowest)
+- For consistent narratives, focus on those with similar percentages in both periods
+- For changed narratives, clearly indicate if they disappeared, emerged, or transformed
+- Consider how narratives reflect Kohelet Forum's evolving role and challenges
 - Make narratives clear and concise"""
 
             response = self.llm_client.invoke_model(
                 body=json.dumps({
                     "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 1000,
+                    "max_tokens": 4096,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.1
                 }),
-                modelId="anthropic.claude-3-haiku-20240307-v1:0",
+                modelId="anthropic.claude-3-5-haiku-20241022-v1:0",
                 accept='application/json',
                 contentType='application/json'
             )
@@ -383,8 +400,8 @@ IMPORTANT:
             # Fallback to raw data analysis
             if not pre_percentages and not post_percentages:
                 analysis = {
-                    'pre_war_top_3': [],
-                    'post_war_top_3': [],
+                    'consistent_narratives': [],
+                    'changed_narratives': [],
                     'analysis': "No narratives found in the data",
                     'narrative_popularity': {
                         'pre_war': {},
@@ -398,8 +415,8 @@ IMPORTANT:
                 
                 # Initialize with empty lists
                 analysis = {
-                    'pre_war_top_3': [],
-                    'post_war_top_3': [],
+                    'consistent_narratives': [],
+                    'changed_narratives': [],
                     'analysis': "Analysis using raw data due to LLM service unavailability",
                     'narrative_popularity': {
                         'pre_war': {},
@@ -407,91 +424,135 @@ IMPORTANT:
                     }
                 }
                 
-                # Add top 3 pre-war narratives if available
-                for narrative, percentage in pre_top_3[:3]:
+                # Find narratives that appear in both periods
+                common_narratives = set(dict(pre_top_3).keys()) & set(dict(post_top_3).keys())
+                
+                # Sort common narratives by average percentage
+                common_sorted = sorted(
+                    [(n, pre_percentages[n], post_percentages[n]) for n in common_narratives],
+                    key=lambda x: (x[1] + x[2])/2,
+                    reverse=True
+                )
+                
+                # Add top 2 consistent narratives
+                for narrative, pre_pct, post_pct in common_sorted[:2]:
                     entry = {
                         "narrative": narrative,
-                        "percentage": percentage,
+                        "pre_war_percentage": pre_pct,
+                        "post_war_percentage": post_pct,
                         "merged_from": [narrative]
                     }
-                    analysis['pre_war_top_3'].append(entry)
-                    analysis['narrative_popularity']['pre_war'][narrative] = percentage
+                    analysis['consistent_narratives'].append(entry)
+                    analysis['narrative_popularity']['pre_war'][narrative] = pre_pct
+                    analysis['narrative_popularity']['post_war'][narrative] = post_pct
                 
-                # Add top 3 post-war narratives if available
-                for narrative, percentage in post_top_3[:3]:
+                # Find narratives that disappeared (in pre-war but not post-war)
+                disappeared = [(n, p, 0) for n, p in pre_top_3 if n not in dict(post_top_3)]
+                
+                # Find narratives that emerged (in post-war but not pre-war)
+                emerged = [(n, 0, p) for n, p in post_top_3 if n not in dict(pre_top_3)]
+                
+                # Find narratives that transformed (significant change in percentage)
+                transformed = [(n, pre_percentages[n], post_percentages[n]) 
+                             for n in common_narratives 
+                             if abs(pre_percentages[n] - post_percentages[n]) > 5
+                             and n not in [x['narrative'] for x in analysis['consistent_narratives']]]
+                
+                # Combine all changed narratives and sort by the magnitude of change
+                all_changes = (
+                    [(n, pre_p, post_p, "disappeared") for n, pre_p, post_p in disappeared] +
+                    [(n, pre_p, post_p, "emerged") for n, pre_p, post_p in emerged] +
+                    [(n, pre_p, post_p, "transformed") for n, pre_p, post_p in transformed]
+                )
+                
+                all_changes.sort(key=lambda x: abs(x[1] - x[2]), reverse=True)
+                
+                # Add top 3 changed narratives
+                for narrative, pre_pct, post_pct, change_type in all_changes[:3]:
                     entry = {
                         "narrative": narrative,
-                        "percentage": percentage,
+                        "pre_war_percentage": pre_pct,
+                        "post_war_percentage": post_pct,
+                        "change_type": change_type,
                         "merged_from": [narrative]
                     }
-                    analysis['post_war_top_3'].append(entry)
-                    analysis['narrative_popularity']['post_war'][narrative] = percentage
+                    analysis['changed_narratives'].append(entry)
+                    if pre_pct > 0:
+                        analysis['narrative_popularity']['pre_war'][narrative] = pre_pct
+                    if post_pct > 0:
+                        analysis['narrative_popularity']['post_war'][narrative] = post_pct
                 
-                # Calculate and add "Others" for pre-war if needed
-                if len(pre_top_3) > 3:
-                    pre_top_3_sum = sum(p for _, p in pre_top_3[:3])
-                    pre_others = 100 - pre_top_3_sum
-                    if pre_others > 0:
-                        entry = {
-                            "narrative": "Others",
-                            "percentage": pre_others,
-                            "merged_from": [n for n, _ in pre_top_3[3:]]
-                        }
-                        analysis['pre_war_top_3'].append(entry)
-                        analysis['narrative_popularity']['pre_war']["Others"] = pre_others
+                # Calculate remaining percentages
+                pre_accounted = sum(n['pre_war_percentage'] for n in analysis['consistent_narratives']) + \
+                              sum(n['pre_war_percentage'] for n in analysis['changed_narratives'])
+                post_accounted = sum(n['post_war_percentage'] for n in analysis['consistent_narratives']) + \
+                               sum(n['post_war_percentage'] for n in analysis['changed_narratives'])
                 
-                # Calculate and add "Others" for post-war if needed
-                if len(post_top_3) > 3:
-                    post_top_3_sum = sum(p for _, p in post_top_3[:3])
-                    post_others = 100 - post_top_3_sum
-                    if post_others > 0:
-                        entry = {
-                            "narrative": "Others",
-                            "percentage": post_others,
-                            "merged_from": [n for n, _ in post_top_3[3:]]
-                        }
-                        analysis['post_war_top_3'].append(entry)
-                        analysis['narrative_popularity']['post_war']["Others"] = post_others
+                # Adjust percentages to sum to 100%
+                if pre_accounted < 100:
+                    scale_factor = 100 / pre_accounted
+                    for n in analysis['consistent_narratives'] + analysis['changed_narratives']:
+                        n['pre_war_percentage'] *= scale_factor
+                        if n['narrative'] in analysis['narrative_popularity']['pre_war']:
+                            analysis['narrative_popularity']['pre_war'][n['narrative']] *= scale_factor
+                
+                if post_accounted < 100:
+                    scale_factor = 100 / post_accounted
+                    for n in analysis['consistent_narratives'] + analysis['changed_narratives']:
+                        n['post_war_percentage'] *= scale_factor
+                        if n['narrative'] in analysis['narrative_popularity']['post_war']:
+                            analysis['narrative_popularity']['post_war'][n['narrative']] *= scale_factor
         
         # Add narrative popularity data structure
         analysis['narrative_popularity'] = {
-            'pre_war': {item['narrative']: item['percentage'] 
-                       for item in analysis['pre_war_top_3']},
-            'post_war': {item['narrative']: item['percentage'] 
-                        for item in analysis['post_war_top_3']}
+            'pre_war': {},
+            'post_war': {}
         }
+        
+        # Add consistent narratives to popularity
+        for item in analysis.get('consistent_narratives', []):
+            analysis['narrative_popularity']['pre_war'][item['narrative']] = item['pre_war_percentage']
+            analysis['narrative_popularity']['post_war'][item['narrative']] = item['post_war_percentage']
+        
+        # Add changed narratives to popularity
+        for item in analysis.get('changed_narratives', []):
+            if item['pre_war_percentage'] > 0:
+                analysis['narrative_popularity']['pre_war'][item['narrative']] = item['pre_war_percentage']
+            if item['post_war_percentage'] > 0:
+                analysis['narrative_popularity']['post_war'][item['narrative']] = item['post_war_percentage']
         
         # Add a separate LLM call just for the evolution analysis
         try:
+            print("\nAttempting evolution analysis with LLM...")
             evolution_prompt = f"""You are a political discourse analyst. Analyze how these narratives changed from pre-war to post-war:
 
 Pre-war Top Narratives:
-- Defending Kohelet Forum's judicial reform (11.1%)
-- Promoting free market economics and privatization (11.1%)
-- Advocating for reduced government regulation (11.1%)
+{[f"- {n['narrative']} ({n['pre_war_percentage']:.1f}%)" for n in analysis['consistent_narratives'] + analysis['changed_narratives'] if n['pre_war_percentage'] > 0]}
 
 Post-war Top Narratives:
-- Promoting Israel's Jewish identity (11.1%)
-- Advocating for reduced government regulation (11.1%)
-- Opposing labor unions and supporting privatization (11.1%)
+{[f"- {n['narrative']} ({n['post_war_percentage']:.1f}%)" for n in analysis['consistent_narratives'] + analysis['changed_narratives'] if n['post_war_percentage'] > 0]}
 
-Return ONLY a concise 34-word analysis focusing on the key shifts in narrative focus, new themes that emerged, and themes that disappeared. Focus on the most significant changes.
-NO other text, NO explanations, EXACTLY 34 words."""
+Return ONLY a concise 40-word analysis focusing on the key shifts in narrative focus, new themes that emerged, and themes that disappeared. Focus on the most significant changes.
+NO other text, NO explanations, EXACTLY 40 words."""
 
+            print("\nEvolution prompt:", evolution_prompt)
+            
             evolution_response = self.llm_client.invoke_model(
                 body=json.dumps({
                     "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 100,
+                    "max_tokens": 200,
                     "messages": [{"role": "user", "content": evolution_prompt}],
                     "temperature": 0.1
                 }),
-                modelId="anthropic.claude-3-haiku-20240307-v1:0",
+                modelId="anthropic.claude-3-5-haiku-20241022-v1:0",
                 accept='application/json',
                 contentType='application/json'
             )
             
             evolution_result = json.loads(evolution_response.get('body').read())
             evolution_content = evolution_result.get('content')[0].get('text', '').strip()
+            
+            print("\nEvolution response:", evolution_content)
             
             # Clean up the evolution content
             evolution_content = evolution_content.strip('"').strip()
@@ -501,6 +562,7 @@ NO other text, NO explanations, EXACTLY 34 words."""
             analysis['analysis'] = evolution_content
             
         except Exception as e:
+            print(f"\nError in evolution analysis: {str(e)}")
             analysis['analysis'] = "Analysis using raw data due to LLM service unavailability"
         
         return analysis
@@ -726,118 +788,91 @@ NO other text, NO explanations, EXACTLY 34 words."""
                    fontsize=24)
 
     def _plot_narrative_distribution(self, ax1, ax2, narrative_data):
-        """Plot narrative distribution as text blocks."""
-        # Set up the figure
-        plt.gcf().set_size_inches(40, 36)
+        """Plot the narrative distribution for pre-war and post-war periods."""
+        # Clear any existing plots
+        ax1.clear()
+        ax2.clear()
         
-        # Clear axes and remove spines
-        for ax in [ax1, ax2]:
-            ax.set_xticks([])
-            ax.set_yticks([])
-            for spine in ax.spines.values():
-                spine.set_visible(False)
+        # Set background colors
+        ax1.set_facecolor('#1e1e1e')
+        ax2.set_facecolor('#1e1e1e')
+        
+        # Define y-positions for narratives
+        y_positions = [0.8, 0.6, 0.4, 0.2]  # Positions for up to 4 narratives
+        
+        # Function to wrap text
+        def wrap_text(text, width=25):
+            return textwrap.fill(text, width=width)
+        
+        # Plot consistent narratives (blue)
+        consistent_color = '#3498db'  # Blue
+        for i, narrative in enumerate(narrative_data.get('consistent_narratives', [])):
+            # Pre-war
+            ax1.text(0.02, y_positions[i], f"{wrap_text(narrative['narrative'])} ({narrative['pre_war_percentage']:.1f}%)",
+                    color='white', fontsize=42, bbox=dict(facecolor=consistent_color, alpha=0.7, edgecolor='none', pad=10))
             
+            # Post-war
+            ax2.text(0.02, y_positions[i], f"{wrap_text(narrative['narrative'])} ({narrative['post_war_percentage']:.1f}%)",
+                    color='white', fontsize=42, bbox=dict(facecolor=consistent_color, alpha=0.7, edgecolor='none', pad=10))
+        
+        # Plot changed narratives with different colors based on change type
+        colors = {
+            'disappeared': '#e74c3c',  # Red
+            'emerged': '#2ecc71',      # Green
+            'transformed': '#f1c40f'   # Yellow
+        }
+        
+        for i, narrative in enumerate(narrative_data.get('changed_narratives', []), start=2):
+            change_type = narrative.get('change_type', 'transformed')
+            color = colors.get(change_type, '#95a5a6')  # Default gray if type not found
+            
+            # Pre-war (if percentage > 0)
+            if narrative['pre_war_percentage'] > 0:
+                ax1.text(0.02, y_positions[i], f"{wrap_text(narrative['narrative'])} ({narrative['pre_war_percentage']:.1f}%)",
+                        color='white', fontsize=42, bbox=dict(facecolor=color, alpha=0.7, edgecolor='none', pad=10))
+            
+            # Post-war (if percentage > 0)
+            if narrative['post_war_percentage'] > 0:
+                ax2.text(0.02, y_positions[i], f"{wrap_text(narrative['narrative'])} ({narrative['post_war_percentage']:.1f}%)",
+                        color='white', fontsize=42, bbox=dict(facecolor=color, alpha=0.7, edgecolor='none', pad=10))
+        
         # Set titles
-        ax1.set_title('Pre-war Narrative Distribution', color='white', pad=50, fontsize=56, weight='bold')
-        ax2.set_title('Post-war Narrative Distribution', color='white', pad=50, fontsize=56, weight='bold')
+        ax1.set_title("Pre-war Narrative Distribution", color='white', fontsize=44, pad=20, weight='bold')
+        ax2.set_title("Post-war Narrative Distribution", color='white', fontsize=44, pad=20, weight='bold')
         
-        # Colors for narratives (in order)
-        colors = ['#FF9999', '#66B2FF', '#99FF99', '#FFCC99']
+        # Remove axes
+        ax1.set_xticks([])
+        ax1.set_yticks([])
+        ax2.set_xticks([])
+        ax2.set_yticks([])
         
-        # Calculate positions with more spacing
-        y_positions = [0.85, 0.55, 0.25]  # Only 3 positions since we don't show Others if 0%
+        # Add legend for narrative types
+        legend_elements = [
+            plt.Rectangle((0, 0), 1, 1, facecolor=consistent_color, alpha=0.7, label='Consistent'),
+            plt.Rectangle((0, 0), 1, 1, facecolor=colors['disappeared'], alpha=0.7, label='Disappeared'),
+            plt.Rectangle((0, 0), 1, 1, facecolor=colors['emerged'], alpha=0.7, label='Emerged'),
+            plt.Rectangle((0, 0), 1, 1, facecolor=colors['transformed'], alpha=0.7, label='Transformed')
+        ]
         
-        # Function to create text with line breaks
-        def format_text(text, width=25):  # Reduced width for better readability
-            words = text.split()
-            lines = []
-            current_line = []
-            current_length = 0
-            
-            for word in words:
-                if current_length + len(word) + 1 <= width:
-                    current_line.append(word)
-                    current_length += len(word) + 1
-                else:
-                    lines.append(' '.join(current_line))
-                    current_line = [word]
-                    current_length = len(word)
-            
-            if current_line:
-                lines.append(' '.join(current_line))
-            return '\n'.join(lines)
-
-        def plot_narratives(ax, narratives, title):
-            """Helper function to plot narratives for one period."""
-            # Filter out "Others" if percentage is 0
-            filtered_narratives = [n for n in narratives 
-                                 if n['narrative'] != "Others" or n['percentage'] > 0]
-            
-            # Plot each narrative
-            for i, item in enumerate(filtered_narratives):
-                if i >= len(y_positions):  # Safety check
-                    break
-                    
-                narrative = item['narrative']
-                percentage = item['percentage']
-                
-                # Format text with manual line breaks
-                formatted_text = format_text(narrative)
-                text = f"{formatted_text}\n{percentage:.1f}%"
-                
-                # Create text box
-                bbox_props = dict(
-                    boxstyle="round,pad=0.3",
-                    fc=colors[i % len(colors)],  # Safely cycle through colors
-                    ec="white",
-                    alpha=0.8,
-                    mutation_scale=2.0
-                )
-                
-                # Add text with adjusted position and width
-                ax.text(0.5, y_positions[i], text,
-                       color='black',
-                       fontsize=42,
-                       weight='bold',
-                       ha='center',
-                       va='center',
-                       bbox=bbox_props,
-                       transform=ax.transAxes,
-                       linespacing=1.3)
+        # Add legend to both plots
+        for ax in [ax1, ax2]:
+            ax.legend(handles=legend_elements, loc='upper right', 
+                     bbox_to_anchor=(0.98, 0.98), fontsize=36, 
+                     facecolor='#1e1e1e', edgecolor='none',
+                     labelcolor='white')
             
             # If no narratives, display a message
-            if not filtered_narratives:
+        if not narrative_data.get('consistent_narratives', []) and not narrative_data.get('changed_narratives', []):
+            for ax in [ax1, ax2]:
                 ax.text(0.5, 0.5, "No narratives available",
                        color='white',
                        fontsize=42,
                        ha='center',
                        va='center',
                        transform=ax.transAxes)
-        
-        # Plot pre-war narratives
-        if 'pre_war_top_3' in narrative_data:
-            plot_narratives(ax1, narrative_data['pre_war_top_3'], 'Pre-war')
-        else:
-            ax1.text(0.5, 0.5, "No pre-war narratives available",
-                    color='white',
-                    fontsize=42,
-                    ha='center',
-                    va='center',
-                    transform=ax1.transAxes)
-        
-        # Plot post-war narratives
-        if 'post_war_top_3' in narrative_data:
-            plot_narratives(ax2, narrative_data['post_war_top_3'], 'Post-war')
-        else:
-            ax2.text(0.5, 0.5, "No post-war narratives available",
-                    color='white',
-                    fontsize=42,
-                    ha='center',
-                    va='center',
-                    transform=ax2.transAxes)
 
     def _plot_user_activity_timeline(self, ax, volume_data: Dict):
-        """Plot user activity timeline for top 3 users."""
+        """Plot user activity timeline for top 5 users."""
         users = [change['username'] for change in volume_data['top_changers']]
         pre_volumes = []
         post_volumes = []
@@ -851,13 +886,13 @@ NO other text, NO explanations, EXACTLY 34 words."""
             post_volumes.append(post_vol)
         
         x = ['Pre-war', 'Post-war']
-        colors = ['#FF9999', '#66B2FF', '#99FF99']
+        colors = ['#FF9999', '#66B2FF', '#99FF99', '#FFCC99', '#FF99CC']  # Added two more colors
         
         for i, (user, color) in enumerate(zip(users, colors)):
             ax.plot(x, [pre_volumes[i], post_volumes[i]], 'o-', 
                    label=f'@{user}', color=color, linewidth=3, markersize=12)
         
-        ax.set_title('Tweet Volume Timeline (Top 3 Users)', pad=20, fontsize=32, color='white')
+        ax.set_title('Tweet Volume Timeline (Top 5 Users)', pad=20, fontsize=32, color='white')
         ax.set_ylabel('Tweet Count', fontsize=28, color='white')
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=24, facecolor='#1e1e1e', labelcolor='white')
@@ -870,37 +905,36 @@ NO other text, NO explanations, EXACTLY 34 words."""
         ax.tick_params(colors='white', labelsize=24)
 
     def _plot_toxicity_volume_correlation(self, ax, volume_data: Dict, toxicity_data: List[Dict]):
-        """Plot scatter of toxicity vs volume changes."""
-        users = volume_data['top_changers'][:3]
-        toxicity_changes = {user['username']: user['change'] for user in toxicity_data}
+        """Plot correlation between toxicity and volume changes."""
+        # Get top 5 users by volume change
+        top_users = [change['username'] for change in volume_data['top_changers']]
         
-        colors = ['#FF9999', '#66B2FF', '#99FF99']
+        # Get volume changes for these users
+        volume_changes = [change['change'] for change in volume_data['top_changers']]
         
-        for i, user in enumerate(users):
-            username = user['username']
-            volume_change = user['change']
-            toxicity_change = toxicity_changes.get(username, 0)
-            color = colors[i]
-            
-            ax.scatter(volume_change, toxicity_change, s=300, color=color, alpha=0.9)
-            ax.annotate(f'@{username}', 
-                       (volume_change, toxicity_change),
-                       xytext=(10, 10), textcoords='offset points',
-                       fontsize=24, color=color, weight='bold',
-                       bbox=dict(facecolor='#1e1e1e', edgecolor='white', alpha=0.8, pad=1))
+        # Get toxicity changes for these users
+        toxicity_changes = []
+        for user in top_users:
+            tox_change = next((change['change'] for change in toxicity_data if change['username'] == user), 0)
+            toxicity_changes.append(tox_change)
         
-        ax.set_title('Volume vs Toxicity Changes (Top 3 Users)', pad=20, fontsize=32, color='white')
+        # Create scatter plot with larger points
+        for user, vol, tox in zip(top_users, volume_changes, toxicity_changes):
+            ax.scatter(vol, tox, s=400, alpha=0.7, label=f'@{user}')  # Increased point size from 200 to 400
+            ax.annotate(f'@{user}', (vol, tox), 
+                       xytext=(5, 5), textcoords='offset points',
+                       color='white', fontsize=24)
+        
+        ax.set_title('Volume vs Toxicity Changes (Top 5 Users)', pad=20, fontsize=32, color='white')
         ax.set_xlabel('Change in Tweet Volume', fontsize=28, color='white')
         ax.set_ylabel('Change in Toxicity', fontsize=28, color='white')
         ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=24, facecolor='#1e1e1e', labelcolor='white')
+        
+        # Add zero lines
         ax.axhline(y=0, color='white', linestyle='--', alpha=0.3)
         ax.axvline(x=0, color='white', linestyle='--', alpha=0.3)
         
-        ax.set_facecolor('#1e1e1e')
-        ax.spines['bottom'].set_color('white')
-        ax.spines['top'].set_color('white')
-        ax.spines['left'].set_color('white')
-        ax.spines['right'].set_color('white')
         ax.tick_params(colors='white', labelsize=24)
 
     def generate_report(self, results: Dict) -> Tuple[str, List[plt.Figure]]:
@@ -967,19 +1001,18 @@ NO other text, NO explanations, EXACTLY 34 words."""
         ])
         
         # Update Narrative Evolution section to include percentages
-        narratives = results['narrative_analysis']
-        report_sections.extend([
-            "### Narrative Evolution\n",
-            "Pre-war Top Narratives:",
-            *[f"- {n['narrative']} ({n['percentage']:.1f}%)" 
-              for n in narratives['pre_war_top_3']
-              if n['narrative'] != "Others" or n['percentage'] > 0],
-            "\nPost-war Top Narratives:",
-            *[f"- {n['narrative']} ({n['percentage']:.1f}%)" 
-              for n in narratives['post_war_top_3']
-              if n['narrative'] != "Others" or n['percentage'] > 0],
-            f"\n**Narrative Evolution Analysis:**\n{narratives['analysis']}\n"
-        ])
+        narrative_data = results['narrative_analysis']
+        if 'consistent_narratives' in narrative_data:
+            report_sections.extend([
+                "### Narrative Evolution Analysis\n",
+                "#### Consistent Narratives",
+                *[f"- **{n['narrative']}**\n  - Pre-war: {n['pre_war_percentage']:.1f}%\n  - Post-war: {n['post_war_percentage']:.1f}%"
+                  for n in narrative_data['consistent_narratives']],
+                "\n#### Changed Narratives",
+                *[f"- **{n['narrative']}** ({n['change_type'].title()})\n  - Pre-war: {n['pre_war_percentage']:.1f}%\n  - Post-war: {n['post_war_percentage']:.1f}%"
+                  for n in narrative_data['changed_narratives']],
+                f"\n**Evolution Analysis:** {narrative_data.get('analysis', '')}\n"
+            ])
         
         # Add Emotional Tones section
         emotional_tones = results['emotional_tones']

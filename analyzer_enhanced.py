@@ -10,7 +10,7 @@ import boto3
 class EnhancedTweetAnalyzer(TweetAnalyzer):
     def __init__(self, batch_size=25, max_retries=3):
         super().__init__(batch_size, max_retries)
-        self.llm_client = boto3.client('bedrock-runtime', region_name='us-east-1')
+        self.llm_client = boto3.client('bedrock-runtime', region_name='us-west-2')
         self.model_name = os.getenv('MODEL_NAME', "anthropic.claude-3-haiku-20240307-v1:0")
 
     def _create_enhanced_prompt(self, tweets_batch):

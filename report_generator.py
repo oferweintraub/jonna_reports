@@ -12,7 +12,7 @@ class UsersReport:
         # Initialize AWS Bedrock client
         self.llm_client = boto3.client(
             service_name='bedrock-runtime',
-            region_name='us-east-1'
+            region_name='us-west-2'
         )
         
         # Set up plotting style
