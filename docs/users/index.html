@@ -21,10 +21,11 @@
                 position: sticky;
                 top: 0;
                 z-index: 1000;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                border-bottom: 1px solid #404040;
             }
             .nav-content {
-                max-width: 800px;
+                max-width: 1200px;
                 margin: 0 auto;
                 display: flex;
                 justify-content: space-between;
@@ -33,16 +34,21 @@
             .nav a {
                 color: #ffffff;
                 text-decoration: none;
-                padding: 5px 10px;
-                border-radius: 4px;
-                transition: background-color 0.3s;
+                padding: 8px 16px;
+                border-radius: 6px;
+                transition: all 0.3s ease;
+                margin: 0 5px;
+                font-weight: 500;
             }
             .nav a:hover {
                 background-color: #404040;
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             }
             .nav .current {
                 background-color: #404040;
                 font-weight: bold;
+                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
             }
             .container {
                 max-width: 800px;
@@ -107,9 +113,10 @@
         <div class="nav">
             <div class="nav-content">
                 <div>
-                    <a href="../index.html" class="">Group Analysis</a>
-                    <a href="#" class="current">User Analysis</a>
+                    <a href="/jonna_reports/index.html" class="">📊 Group Analysis</a>
+                    <a href="/jonna_reports/users/index.html" class="current">👥 User Analysis</a>
                 </div>
+                
             </div>
         </div>
         
