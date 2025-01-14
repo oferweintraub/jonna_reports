@@ -14,8 +14,8 @@ class TweetAnalyzer:
         self.batch_size = batch_size
         self.max_retries = max_retries
         self.llm_client = self._init_llm_client()
-        # Get model from environment or use default
-        self.model_name = os.getenv('MODEL_NAME', "anthropic.claude-3-haiku-20240307-v1:0")
+        # Use the specified model consistently
+        self.model_name = "anthropic.claude-3-5-haiku-20241022-v1:0"
         
     def _init_llm_client(self):
         """Initialize AWS Bedrock client with timeouts and retries"""
@@ -45,22 +45,19 @@ class TweetAnalyzer:
     
     def _create_prompt(self, formatted_tweets: str, username: str) -> str:
         """Create analysis prompt with emphasis on concise responses"""
-        return f"""Context: The users you are going to analyze are all members of "Kohelet Forum" 
-        Which charactrized by the following beliefs:
-        
-        Kohelet Forum is an influential Israeli think tank established in 2012, known for:
-        - Leading role in designing and promoting the 2023 judicial reform
-        - Advocating for free-market economics and reduced government regulation
-        - Promoting Israel's identity as a Jewish nation-state (including drafting the 2018 Nation-State Law)
-        - Supporting reduced judicial oversight and stronger parliamentary power
-        - Opposing labor unions and supporting privatization
-        - Advocating for educational autonomy and reduced government control
+        return f"""Context about Kohelet Forum:
+        Kohelet Forum is an influential Israeli think tank established in 2012, self-defined as "non-partisan" but widely associated with Jewish nationalism and free-market principles. It gained significant attention for:
+        - Leading role in designing and promoting the 2023 judicial reform, which sparked massive protests
+        - Promoting free-market economics and limited government intervention
+        - Facing controversy over transparency and foreign funding
+        - Experiencing major changes in 2024 including loss of funding and staff reductions
+        - Being criticized for its stance on public housing, workers' rights, and minimum wage
         
         You are a political expert in Israel politics analyzing tweets by user @{username}. 
         Note that most tweets are in Hebrew - analyze them in their original context.
         
         {formatted_tweets}
-
+        
         Provide a concise analysis in the exact JSON format below. Keep all text fields brief and focused:
         {{
             "narratives": [3 brief phrases, max 10 words each],
@@ -81,7 +78,7 @@ class TweetAnalyzer:
             "stated_goals": [2-3 goals, max 10 words each],
             "psychological_profile": [max 30 words]
         }}
-
+        
         Keep all responses extremely concise to ensure complete JSON structure.
         For toxic_examples, preserve the original Hebrew text exactly as it appears in the tweets."""
 
@@ -281,11 +278,11 @@ class TweetAnalyzer:
                 response = self.llm_client.invoke_model(
                     body=json.dumps({
                         "anthropic_version": "bedrock-2023-05-31",
-                        "max_tokens": 4096,
+                        "max_tokens": 4096,  # Set to 4096 consistently
                         "messages": [{"role": "user", "content": prompt}],
                         "temperature": 0.1
                     }),
-                    modelId=self.model_name,  # Use the model from config
+                    modelId=self.model_name,
                     accept='application/json',
                     contentType='application/json'
                 )

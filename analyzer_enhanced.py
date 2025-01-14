@@ -11,72 +11,80 @@ class EnhancedTweetAnalyzer(TweetAnalyzer):
     def __init__(self, batch_size=25, max_retries=3):
         super().__init__(batch_size, max_retries)
         self.llm_client = boto3.client('bedrock-runtime', region_name='us-west-2')
-        self.model_name = os.getenv('MODEL_NAME', "anthropic.claude-3-haiku-20240307-v1:0")
+        self.model_name = "anthropic.claude-3-5-haiku-20241022-v1:0"
 
     def _create_enhanced_prompt(self, tweets_batch):
         """Create a prompt for enhanced analysis focusing on specific ratios."""
-        prompt = f"""Analyze these tweets and provide scores and explanations for the following metrics. 
-All scores should be on a scale of 0-100:
+        prompt = f"""Context about Kohelet Forum:
+        Kohelet Forum is an influential Israeli think tank established in 2012, self-defined as "non-partisan" but widely associated with Jewish nationalism and free-market principles. It gained significant attention for:
+        - Leading role in designing and promoting the 2023 judicial reform, which sparked massive protests
+        - Promoting free-market economics and limited government intervention
+        - Facing controversy over transparency and foreign funding
+        - Experiencing major changes in 2024 including loss of funding and staff reductions
+        - Being criticized for its stance on public housing, workers' rights, and minimum wage
 
-1. Judicial-Security Ratio (0-100):
-   - 0: Exclusively focused on security matters
-   - 25: Strong emphasis on security with some judicial reform mentions
-   - 50: Balanced discussion of both judicial reform and security
-   - 75: Strong emphasis on judicial reform with some security mentions
-   - 100: Exclusively focused on judicial reform
+        Analyze these tweets and provide scores and explanations for the following metrics. 
+        All scores should be on a scale of 0-100:
 
-2. Rights-Security Balance (0-100):
-   - 0: Exclusively prioritizes security over rights
-   - 25: Strongly favors security with some consideration for rights
-   - 50: Balanced consideration of both rights and security
-   - 75: Strongly favors rights with some security considerations
-   - 100: Exclusively prioritizes rights over security
+        1. Judicial-Security Ratio (0-100):
+           - 0: Exclusively focused on security matters
+           - 25: Strong emphasis on security with some judicial reform mentions
+           - 50: Balanced discussion of both judicial reform and security
+           - 75: Strong emphasis on judicial reform with some security mentions
+           - 100: Exclusively focused on judicial reform
 
-3. Emergency Powers Position (0-100):
-   - 0: Strongly opposes emergency powers
-   - 25: Generally critical of emergency powers
-   - 50: Neutral or balanced view on emergency powers
-   - 75: Generally supportive of emergency powers
-   - 100: Strongly advocates for emergency powers
+        2. Rights-Security Balance (0-100):
+           - 0: Exclusively prioritizes security over rights
+           - 25: Strongly favors security with some consideration for rights
+           - 50: Balanced consideration of both rights and security
+           - 75: Strongly favors rights with some security considerations
+           - 100: Exclusively prioritizes rights over security
 
-4. Domestic-International Ratio (0-100):
-   - 0: Exclusively focused on international matters
-   - 25: Primarily international with some domestic context
-   - 50: Equal focus on domestic and international issues
-   - 75: Primarily domestic with some international context
-   - 100: Exclusively focused on domestic matters
+        3. Emergency Powers Position (0-100):
+           - 0: Strongly opposes emergency powers
+           - 25: Generally critical of emergency powers
+           - 50: Neutral or balanced view on emergency powers
+           - 75: Generally supportive of emergency powers
+           - 100: Strongly advocates for emergency powers
 
-For each metric, provide:
-1. A score (0-100)
-2. A brief explanation (max 25 words)
-3. A confidence rating (0-100)
+        4. Domestic-International Ratio (0-100):
+           - 0: Exclusively focused on international matters
+           - 25: Primarily international with some domestic context
+           - 50: Equal focus on domestic and international issues
+           - 75: Primarily domestic with some international context
+           - 100: Exclusively focused on domestic matters
 
-Tweets to analyze:
-{tweets_batch}
+        For each metric, provide:
+        1. A score (0-100)
+        2. A brief explanation (max 25 words)
+        3. A confidence rating (0-100)
 
-Respond in this JSON format:
-{{
-    "judicial_security_ratio": {{
-        "score": <0-100>,
-        "explanation": "brief explanation",
-        "confidence": <0-100>
-    }},
-    "rights_security_balance": {{
-        "score": <0-100>,
-        "explanation": "brief explanation",
-        "confidence": <0-100>
-    }},
-    "emergency_powers_position": {{
-        "score": <0-100>,
-        "explanation": "brief explanation",
-        "confidence": <0-100>
-    }},
-    "domestic_international_ratio": {{
-        "score": <0-100>,
-        "explanation": "brief explanation",
-        "confidence": <0-100>
-    }}
-}}"""
+        Tweets to analyze:
+        {tweets_batch}
+
+        Respond in this JSON format:
+        {{
+            "judicial_security_ratio": {{
+                "score": <0-100>,
+                "explanation": "brief explanation",
+                "confidence": <0-100>
+            }},
+            "rights_security_balance": {{
+                "score": <0-100>,
+                "explanation": "brief explanation",
+                "confidence": <0-100>
+            }},
+            "emergency_powers_position": {{
+                "score": <0-100>,
+                "explanation": "brief explanation",
+                "confidence": <0-100>
+            }},
+            "domestic_international_ratio": {{
+                "score": <0-100>,
+                "explanation": "brief explanation",
+                "confidence": <0-100>
+            }}
+        }}"""
         return prompt
 
     def analyze_enhanced_metrics(self, tweets: List[Dict], username: str) -> List[Dict]:

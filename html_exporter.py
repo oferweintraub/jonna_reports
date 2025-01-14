@@ -23,10 +23,11 @@ class HTMLExporter:
                 position: sticky;
                 top: 0;
                 z-index: 1000;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                border-bottom: 1px solid #404040;
             }
             .nav-content {
-                max-width: 800px;
+                max-width: 1200px;
                 margin: 0 auto;
                 display: flex;
                 justify-content: space-between;
@@ -35,16 +36,21 @@ class HTMLExporter:
             .nav a {
                 color: #ffffff;
                 text-decoration: none;
-                padding: 5px 10px;
-                border-radius: 4px;
-                transition: background-color 0.3s;
+                padding: 8px 16px;
+                border-radius: 6px;
+                transition: all 0.3s ease;
+                margin: 0 5px;
+                font-weight: 500;
             }
             .nav a:hover {
                 background-color: #404040;
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             }
             .nav .current {
                 background-color: #404040;
                 font-weight: bold;
+                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
             }
             .container {
                 max-width: 800px;
@@ -128,94 +134,77 @@ class HTMLExporter:
         buf.seek(0)
         return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-    def _generate_nav(self, current_page):
-        """Generate navigation HTML based on current page."""
-        is_group = current_page == 'group'
-        is_user = current_page == 'user'
-        
-        return f"""
+    def _generate_nav(self, page_type='group'):
+        """Generate navigation HTML based on the current page type."""
+        nav_html = """
         <div class="nav">
             <div class="nav-content">
                 <div>
-                    <a href="../index.html" class="{('current' if is_group else '')}">Group Analysis</a>
-                    <a href="#" class="{('current' if is_user else '')}">User Analysis</a>
+                    <a href="/jonna_reports/index.html" class="{group_class}">📊 Group Analysis</a>
+                    <a href="/jonna_reports/users/index.html" class="{user_class}">👥 User Analysis</a>
                 </div>
+                {back_link}
             </div>
         </div>
         """
+        
+        group_class = 'current' if page_type == 'group' else ''
+        user_class = 'current' if page_type in ['user', 'user_detail'] else ''
+        back_link = '<a href="/jonna_reports/users/index.html">⬅️ Back to User List</a>' if page_type == 'user_detail' else ''
+        
+        return nav_html.format(
+            group_class=group_class,
+            user_class=user_class,
+            back_link=back_link
+        )
 
     def export_report(self, report_text: str, figures: list, output_path: str = None):
-        """Export report to HTML with embedded figures."""
+        """Export report to HTML file."""
+        if output_path is None:
+            output_path = 'docs/index.html'
+        
+        # Determine page type based on output path
+        if output_path == 'docs/index.html':
+            page_type = 'group'
+        elif output_path == 'docs/users/index.html':
+            page_type = 'user'
+        else:
+            page_type = 'user_detail'
+        
         # Convert markdown to HTML
         html_content = markdown.markdown(report_text)
-
-        # Determine if this is a group or user report
-        is_group_report = "# Group Analysis Report" in report_text
-        current_page = 'group' if is_group_report else 'user'
         
         # Create figure HTML
-        figure_html = ""
+        figures_html = ''
         for fig in figures:
-            if fig.get_axes():  # Only process figures that have content
-                base64_fig = self._figure_to_base64(fig)
-                figure_html += f'<div class="figure"><img src="data:image/png;base64,{base64_fig}"/></div>'
-                plt.close(fig)  # Close the figure to free memory
-
-        # Generate navigation
-        nav_html = self._generate_nav(current_page)
-
-        # Combine everything into HTML document
-        html_doc = f"""
+            figures_html += f'<img src="data:image/png;base64,{self._figure_to_base64(fig)}" style="max-width: 100%; height: auto; margin: 20px 0;"><br>'
+        
+        # Create HTML document
+        html = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
             <title>Analysis Report</title>
             {self.style}
         </head>
         <body>
-            {nav_html}
+            {self._generate_nav(page_type)}
             <div class="container">
                 {html_content}
-                {figure_html}
+                {figures_html}
             </div>
         </body>
         </html>
         """
-
-        # Set output path
-        if output_path is None:
-            os.makedirs('docs', exist_ok=True)
-            os.makedirs('docs/users', exist_ok=True)
-            if "# Group Analysis Report" in report_text:
-                output_path = 'docs/index.html'
-            elif "# User Analysis Report" in report_text:
-                # Extract username from the report text - look for the exact format we use
-                lines = report_text.split('\n')
-                username = None
-                for line in lines:
-                    if '## Analysis for @' in line:
-                        username = line.replace('## Analysis for @', '').strip()
-                        break
-                
-                if username:
-                    output_path = f'docs/users/{username}_analysis.html'
-                else:
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    output_path = f'docs/users/user_analysis_{timestamp}.html'
-            else:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                output_path = f'docs/report_{timestamp}.html'
-
-        # Create parent directory if it doesn't exist
+        
+        # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-        # Write the HTML file
+        
+        # Write HTML to file
         with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(html_doc)
-
-        return output_path 
+            f.write(html)
 
     def generate_user_index(self, usernames):
         """Generate an index page for user analyses."""

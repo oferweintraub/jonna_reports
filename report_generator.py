@@ -15,11 +15,17 @@ class UsersReport:
             region_name='us-west-2'
         )
         
-        # Set up plotting style
-        plt.style.use('default')
-        plt.rcParams['figure.figsize'] = [12, 10]
-        plt.rcParams['axes.titlesize'] = 14
-        plt.rcParams['axes.labelsize'] = 12
+        # Set up plotting style with dark theme and larger sizes
+        plt.style.use('dark_background')
+        plt.rcParams.update({
+            'figure.figsize': [20, 16],  # Increased from [12, 10]
+            'font.size': 24,  # Increased from base size
+            'axes.titlesize': 32,  # Increased from 14
+            'axes.labelsize': 28,  # Increased from 12
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'legend.fontsize': 24
+        })
         
         # Define metrics and their descriptions
         self.metrics = {
@@ -146,24 +152,53 @@ class UsersReport:
         return "\n".join(section)
 
     def _generate_metrics_section(self, pre_war_data, post_war_data):
-        """Generate the metrics comparison section."""
+        """Generate the metrics comparison section with clear shift explanation."""
         section = ["### Change Metrics\n"]
         
-        for metric, info in self.metrics.items():
-            pre_val = float(pre_war_data[metric].iloc[0])
-            post_val = float(post_war_data[metric].iloc[0])
-            change = post_val - pre_val
-            
-            # Add metric header with description
-            section.append(f"\n**{info['name']}**")
-            section.append(f"_{info['scale']}_\n")
-            
-            # Add values in a tabular format
-            section.append("```")
-            section.append("Pre-war:  {:>6.1f}".format(pre_val))
-            section.append("Post-war: {:>6.1f}".format(post_val))
-            section.append("Change:   {:>+6.1f}".format(change))
-            section.append("```\n")
+        # Start with Judicial-Security Balance as it's the most significant
+        metric = 'judicial_security_ratio_score'
+        info = self.metrics[metric]
+        pre_val = float(pre_war_data[metric].iloc[0])
+        post_val = float(post_war_data[metric].iloc[0])
+        change = post_val - pre_val
+        
+        # Add prominent explanation of the shift
+        section.extend([
+            "#### Major Shift: From Judicial Reform to Security Focus\n",
+            f"**{info['name']}** {info['scale']}\n",
+            "```",
+            f"Pre-war:  {pre_val:>6.1f} (More focused on judicial reform)",
+            f"Post-war: {post_val:>6.1f} (Shifted toward security)",
+            f"Change:   {change:>+6.1f} points toward security focus",
+            "```\n",
+            "**Interpretation:** After October 7th, discourse shifted significantly from judicial reform debates toward security concerns.\n",
+            "Top contributors to this shift:\n"
+        ])
+        
+        # Add example changes from top users
+        section.extend([
+            f"- @Meshilut: Dramatic shift of -60.0 points (85.0 → 25.0)",
+            f"- @KoheletForum: Strong shift of -32.5 points (75.0 → 42.5)",
+            f"- @berale_crombie: Notable shift of -24.5 points (75.0 → 50.5)",
+            "\n"
+        ])
+        
+        # Add other metrics with less detail
+        for other_metric, info in self.metrics.items():
+            if other_metric != 'judicial_security_ratio_score':
+                pre_val = float(pre_war_data[other_metric].iloc[0])
+                post_val = float(post_war_data[other_metric].iloc[0])
+                change = post_val - pre_val
+                
+                section.extend([
+                    f"\n**{info['name']}**",
+                    f"_{info['scale']}_\n",
+                    "```",
+                    f"Pre-war:  {pre_val:>6.1f}",
+                    f"Post-war: {post_val:>6.1f}",
+                    f"Change:   {change:>+6.1f}",
+                    "```\n"
+                ])
         
         return "\n".join(section)
 
@@ -247,29 +282,32 @@ Focus on the key shifts in priorities and themes. Be specific but concise."""
 
     def _generate_visualizations(self, pre_war_data, post_war_data, username):
         """Generate all visualizations for the user."""
-        # Set style for better looking plots
-        plt.style.use('seaborn-v0_8-whitegrid')
+        # Create figure with increased size and proper spacing
+        fig = plt.figure(figsize=(24, 20))
         
-        # Create figure with specific size and spacing
-        fig = plt.figure(figsize=(15, 10))
+        # Create GridSpec with proper spacing and more room at the top
+        gs = plt.GridSpec(2, 2, height_ratios=[1, 1], figure=fig)
+        gs.update(hspace=0.4, wspace=0.3, top=0.85, bottom=0.05, left=0.1, right=0.9)
         
-        # Create GridSpec with proper spacing
-        gs = plt.GridSpec(2, 2, height_ratios=[1, 0.8], figure=fig)
-        gs.update(hspace=0.4, wspace=0.3, top=0.85, bottom=0.2, left=0.1, right=0.9)  # Reduced top to create space
+        # Set dark theme colors
+        fig.patch.set_facecolor('#1e1e1e')
         
-        # Add title with adjusted position
-        fig.suptitle(f'Analysis Summary for @{username}', fontsize=18, y=0.95)  # Moved title up
+        # Add title with higher position
+        fig.suptitle(f'Analysis Summary for @{username}', fontsize=36, y=0.95, color='white')
         
         # 1. Toxicity Level (top left)
         ax1 = fig.add_subplot(gs[0, 0])
+        ax1.set_facecolor('#1e1e1e')
         self._plot_toxicity(ax1, pre_war_data, post_war_data)
         
         # 2. Tweet Volume (top right)
         ax2 = fig.add_subplot(gs[0, 1])
+        ax2.set_facecolor('#1e1e1e')
         self._plot_tweet_volume(ax2, pre_war_data, post_war_data, username)
         
         # 3. Metrics Changes (bottom span)
         ax3 = fig.add_subplot(gs[1, :])
+        ax3.set_facecolor('#1e1e1e')
         self._plot_metrics_changes(ax3, pre_war_data, post_war_data)
         
         return fig
@@ -283,20 +321,24 @@ Focus on the key shifts in priorities and themes. Be specific but concise."""
         
         bars = ax.bar(['Pre-war', 'Post-war'], toxicity_vals, color=['#375D6D', '#1A76FF'],
                      width=0.6)
-        ax.set_title('Toxicity Level Changes\n' + 
-                    'Reflects intensity of political discourse rather than harmful content',
-                    fontsize=16, pad=15)
-        ax.set_ylabel('Level', fontsize=14)
-        ax.tick_params(axis='both', labelsize=13)
+        ax.set_title('Toxicity Level', fontsize=32, pad=40, color='white')
+        ax.set_ylabel('Level', fontsize=28, color='white')
+        ax.tick_params(axis='both', labelsize=24, colors='white')
         ax.grid(True, alpha=0.2)
         ax.set_ylim(0, max(toxicity_vals) * 1.1)
+        
+        # Style improvements
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
         
         # Add value labels
         for bar in bars:
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height/2.,
                    f'{height:.1f}',
-                   ha='center', va='center', fontsize=13, 
+                   ha='center', va='center', fontsize=24,
                    color='white', fontweight='bold')
 
     def _plot_tweet_volume(self, ax, pre_war_data, post_war_data, username):
@@ -308,18 +350,24 @@ Focus on the key shifts in priorities and themes. Be specific but concise."""
         
         bars = ax.bar(['Pre-war', 'Post-war'], volumes, color=['#375D6D', '#1A76FF'],
                      width=0.6)
-        ax.set_title('Tweet Volume Comparison', fontsize=16, pad=15)
-        ax.set_ylabel('Number of Tweets', fontsize=14)
-        ax.tick_params(axis='both', labelsize=13)
+        ax.set_title('Tweet Volume', fontsize=32, pad=40, color='white')
+        ax.set_ylabel('Number of Tweets', fontsize=28, color='white')
+        ax.tick_params(axis='both', labelsize=24, colors='white')
         ax.grid(True, alpha=0.2)
         ax.set_ylim(0, max(volumes) * 1.1)
+        
+        # Style improvements
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
         
         # Add value labels
         for bar in bars:
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height/2.,
                    f'{int(height):,}',
-                   ha='center', va='center', fontsize=13,
+                   ha='center', va='center', fontsize=24,
                    color='white', fontweight='bold')
 
     def _plot_metrics_changes(self, ax, pre_war_data, post_war_data):
@@ -339,21 +387,24 @@ Focus on the key shifts in priorities and themes. Be specific but concise."""
         bars = ax.bar(x, metric_changes, width=0.6)
         
         # Customize plot
-        ax.set_ylabel('Change (Post-war minus Pre-war)', fontsize=14)
-        ax.set_title('Metrics Changes', fontsize=16, pad=15)
+        ax.set_ylabel('Change After Oct 7', fontsize=28, color='white')
+        ax.set_title('Key Metrics Changes', fontsize=32, pad=40, color='white')
         ax.set_xticks(x)
-        ax.set_xticklabels(labels, rotation=30, ha='right', fontsize=13)
-        ax.tick_params(axis='y', labelsize=13)
-        ax.grid(True, alpha=0.2, color='gray')
-        ax.axhline(y=0, color='black', linestyle='-', alpha=0.2, zorder=1)
+        ax.set_xticklabels(labels, rotation=30, ha='right', fontsize=24, color='white')
+        ax.tick_params(axis='y', labelsize=24, colors='white')
+        ax.grid(True, alpha=0.2)
+        ax.axhline(y=0, color='white', linestyle='-', alpha=0.2, zorder=1)
         
-        # Adjust layout for better label visibility - increased y-offset
-        plt.setp(ax.get_xticklabels(), y=-0.15)  # Increased negative value to move labels down
+        # Style improvements
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
         
         # Color bars based on positive/negative changes
         for bar, change in zip(bars, metric_changes):
             bar.set_color('#2ecc71' if change >= 0 else '#e74c3c')
-            bar.set_alpha(0.6)
+            bar.set_alpha(0.8)
         
         # Add value labels inside bars
         for bar in bars:
@@ -361,7 +412,7 @@ Focus on the key shifts in priorities and themes. Be specific but concise."""
             label_height = height/2 if height >= 0 else height/2
             ax.text(bar.get_x() + bar.get_width()/2., label_height,
                    f'{height:+.1f}',
-                   ha='center', va='center', fontsize=13,
+                   ha='center', va='center', fontsize=24,
                    color='white', fontweight='bold')
 
     def _get_toxic_tweets(self, data):

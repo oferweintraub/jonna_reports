@@ -238,9 +238,9 @@ class GroupAnalyzer:
         
         # Sort and get top 5 changers by absolute change
         top_changers = sorted(
-            toxicity_changes,
-            key=lambda x: abs(x['change']),
-            reverse=True
+                toxicity_changes,
+                key=lambda x: abs(x['change']),
+                reverse=True
         )[:5] if toxicity_changes else []
         
         return {
@@ -287,7 +287,7 @@ class GroupAnalyzer:
         
         pre_percentages = {k: (v/pre_total)*100 for k, v in pre_counts.items()}
         post_percentages = {k: (v/post_total)*100 for k, v in post_counts.items()}
-
+        
         try:
             # Try LLM analysis first with improved prompt for merging
             print("\nAttempting LLM narrative analysis...")
@@ -504,7 +504,7 @@ IMPORTANT:
                             analysis['narrative_popularity']['post_war'][n['narrative']] *= scale_factor
         
         # Add narrative popularity data structure
-        analysis['narrative_popularity'] = {
+            analysis['narrative_popularity'] = {
             'pre_war': {},
             'post_war': {}
         }
@@ -615,12 +615,11 @@ NO other text, NO explanations, EXACTLY 40 words."""
         self._plot_toxicity_changes(ax, results['top_changers']['toxicity_top_changers'])
         figures.append(fig_toxicity)
         
-        # 5. Narrative Distribution (increased size)
+        # 5. Narrative Distribution
         if 'narrative_analysis' in results:
-            fig_narratives = plt.figure(figsize=(40, 48))  # Made even taller
+            fig_narratives = plt.figure(figsize=(40, 48))
             fig_narratives.patch.set_facecolor('#1e1e1e')
             
-            # Create gridspec with more vertical space
             gs = fig_narratives.add_gridspec(
                 1, 2,
                 width_ratios=[1, 1],
@@ -640,7 +639,7 @@ NO other text, NO explanations, EXACTLY 40 words."""
                 self._plot_narrative_distribution(ax1, ax2, results['narrative_analysis'])
                 figures.append(fig_narratives)
             except Exception as e:
-                plt.close(fig_narratives)  # Clean up the figure if there's an error
+                plt.close(fig_narratives)
         
         # 6. User Activity Timeline
         fig_timeline = plt.figure(figsize=(20, 10), constrained_layout=True)
@@ -688,41 +687,46 @@ NO other text, NO explanations, EXACTLY 40 words."""
                    color='white', weight='bold',
                    fontsize=24)
 
-    def _plot_metrics_changes(self, ax, metrics_data: Dict):
+    def _plot_metrics_changes(self, ax, metrics_data):
         """Plot metrics changes."""
-        metrics = list(metrics_data.keys())
-        changes = [data['group_change'] for data in metrics_data.values()]
+        metrics = []
+        changes = []
         
+        for metric_key, metric_info in metrics_data.items():
+            metrics.append(metric_info['name'])
+            changes.append(float(metric_info.get('group_change', 0)))
+        
+        # Create bars
         x = np.arange(len(metrics))
-        bars = ax.bar(x, changes)
-        for bar, change in zip(bars, changes):
-            bar.set_color('#2ecc71' if change >= 0 else '#e74c3c')
-            bar.set_alpha(0.6)
-            
-        ax.set_title('Group-Level Metrics Changes', fontsize=32, color='white', pad=20)
-        ax.set_ylabel('Average Change', fontsize=28, color='white')
+        bars = ax.bar(x, changes, width=0.6)
         
+        # Customize plot
+        ax.set_ylabel('Change After Oct 7', fontsize=28, color='white')
+        ax.set_title('Key Metrics Changes', fontsize=32, pad=40, color='white')
         ax.set_xticks(x)
-        ax.set_xticklabels([metrics_data[m]['name'] for m in metrics], 
-                          rotation=45, ha='right', color='white', fontsize=24)
+        ax.set_xticklabels(metrics, rotation=30, ha='right', fontsize=24, color='white')
+        ax.tick_params(axis='y', labelsize=24, colors='white')
+        ax.grid(True, alpha=0.2)
+        ax.axhline(y=0, color='white', linestyle='-', alpha=0.2, zorder=1)
         
-        ax.set_facecolor('#1e1e1e')
+        # Style improvements
         ax.spines['bottom'].set_color('white')
         ax.spines['top'].set_color('white')
         ax.spines['left'].set_color('white')
         ax.spines['right'].set_color('white')
-        ax.tick_params(colors='white', labelsize=24)
-        ax.grid(True, alpha=0.3)
         
-        # Add value labels with larger font
-        for bar in bars:
+        # Color bars based on positive/negative changes
+        for bar, change in zip(bars, changes):
+            bar.set_color('#e74c3c' if change < 0 else '#2ecc71')
+            bar.set_alpha(0.8)
+            
+            # Add value labels inside bars
             height = bar.get_height()
-            y_pos = height/2 if height >= 0 else height/2
-            ax.text(bar.get_x() + bar.get_width()/2., y_pos,
-                   f'{height:+.1f}',
-                   ha='center', va='center',
-                   color='white', weight='bold',
-                   fontsize=24)
+            label_height = height/2 if height >= 0 else height/2
+            ax.text(bar.get_x() + bar.get_width()/2., label_height,
+                   f'{change:+.1f}',
+                   ha='center', va='center', fontsize=24,
+                   color='white', fontweight='bold')
 
     def _plot_toxicity_changes(self, ax, toxicity_data: List[Dict]):
         """Plot toxicity changes."""
@@ -764,7 +768,7 @@ NO other text, NO explanations, EXACTLY 40 words."""
         for bar, change in zip(bars, changes):
             bar.set_color('#2ecc71' if change >= 0 else '#e74c3c')
             bar.set_alpha(0.6)
-            
+        
         ax.set_title(f'Top Changes in {metric_data["name"]}\n{metric_data["scale"]}', 
                     fontsize=32, pad=20, color='white')
         ax.set_ylabel('Change in Score', fontsize=28, color='white')
@@ -982,7 +986,7 @@ NO other text, NO explanations, EXACTLY 40 words."""
             report_sections.extend([
                 f"\n**{metric_data['name']}**",
                 f"{metric_data['scale']}\n",
-                f"**Group Average Change: {metric_data['group_change']:+.1f}**\n",
+                f"**Group Average Change: {metric_data['group_change']:.1f}**\n",
                 "**Top Changes:**",
                 *[f"- <span style='color: #3498DB'>@{user['username']}</span> <span style='color: {'#2ECC71' if user['change'] >= 0 else '#E74C3C'}'>{user['change']:+.1f} points</span> │ Pre: {user['pre_val']:.1f} → Post: {user['post_val']:.1f}"
                   for user in metric_data['top_changers']],
@@ -1003,7 +1007,7 @@ NO other text, NO explanations, EXACTLY 40 words."""
         # Update Narrative Evolution section to include percentages
         narrative_data = results['narrative_analysis']
         if 'consistent_narratives' in narrative_data:
-            report_sections.extend([
+        report_sections.extend([
                 "### Narrative Evolution Analysis\n",
                 "#### Consistent Narratives",
                 *[f"- **{n['narrative']}**\n  - Pre-war: {n['pre_war_percentage']:.1f}%\n  - Post-war: {n['post_war_percentage']:.1f}%"
@@ -1012,7 +1016,7 @@ NO other text, NO explanations, EXACTLY 40 words."""
                 *[f"- **{n['narrative']}** ({n['change_type'].title()})\n  - Pre-war: {n['pre_war_percentage']:.1f}%\n  - Post-war: {n['post_war_percentage']:.1f}%"
                   for n in narrative_data['changed_narratives']],
                 f"\n**Evolution Analysis:** {narrative_data.get('analysis', '')}\n"
-            ])
+        ])
         
         # Add Emotional Tones section
         emotional_tones = results['emotional_tones']
@@ -1041,19 +1045,22 @@ NO other text, NO explanations, EXACTLY 40 words."""
     def _generate_metrics_section(self, results):
         """Generate the metrics analysis section."""
         section = []
-        for metric, data in results['metrics'].items():
+        for metric, data in results['metrics_changes'].items():
             # Add metric header and description
             section.extend([
                 f"### {data['name']}\n",
                 f"{data['scale']}\n",
-                f"Group average change: {data['avg_change']:.1f} points (Pre: {data['pre_avg']:.1f} → Post: {data['post_avg']:.1f})\n"
+                f"Group Average Change: {data['group_change']:.1f}\n",
             ])
             
             # Add top changes with improved formatting
-            top_changes = self._format_top_changes(data['top_changes'])
-            section.append(f"{top_changes}\n")
+            if data['top_changers']:
+                section.append("Top Changes:\n")
+                for user in data['top_changers']:
+                    section.append(f"@{user['username']} {user['change']:+.1f} points │ Pre: {user['pre_val']:.1f} → Post: {user['post_val']:.1f}")
+                section.append("\n")
         
-        return section 
+        return section
 
     def _analyze_emotional_tones(self, df: pd.DataFrame) -> Dict:
         """Analyze top 3 emotional tones from the data."""
