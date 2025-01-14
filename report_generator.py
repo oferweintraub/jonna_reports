@@ -45,16 +45,15 @@ class UsersReport:
             }
         }
 
-    def generate_report(self, pre_war_data, post_war_data, username):
-        """Generate a complete analysis report for a single user."""
+    def generate_report(self, pre_war_data, post_war_data, username=None):
+        """Generate a report comparing pre-war and post-war data."""
         report_sections = []
         figures = []
-
-        # Add report header
-        report_sections.append(self._generate_header())
         
-        # Add user header
-        report_sections.append(self._generate_user_header(username))
+        # Add report type and user header
+        report_sections.append("# User Analysis Report")
+        if username:
+            report_sections.append(f"\n## Analysis for @{username}\n")
         
         # Add tweet volume section
         report_sections.append(self._generate_tweet_volume_section(pre_war_data, post_war_data, username))

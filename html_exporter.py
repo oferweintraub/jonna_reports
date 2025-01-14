@@ -15,11 +15,40 @@ class HTMLExporter:
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
                 line-height: 1.6;
                 margin: 0;
-                padding: 20px;
+                padding: 0;
+            }
+            .nav {
+                background-color: #2d2d2d;
+                padding: 15px 20px;
+                position: sticky;
+                top: 0;
+                z-index: 1000;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            }
+            .nav-content {
+                max-width: 800px;
+                margin: 0 auto;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .nav a {
+                color: #ffffff;
+                text-decoration: none;
+                padding: 5px 10px;
+                border-radius: 4px;
+                transition: background-color 0.3s;
+            }
+            .nav a:hover {
+                background-color: #404040;
+            }
+            .nav .current {
+                background-color: #404040;
+                font-weight: bold;
             }
             .container {
                 max-width: 800px;
-                margin: 0 auto;
+                margin: 20px auto;
                 background-color: #2d2d2d;
                 padding: 40px;
                 border-radius: 8px;
@@ -99,11 +128,31 @@ class HTMLExporter:
         buf.seek(0)
         return base64.b64encode(buf.getvalue()).decode('utf-8')
 
+    def _generate_nav(self, current_page):
+        """Generate navigation HTML based on current page."""
+        is_group = current_page == 'group'
+        is_user = current_page == 'user'
+        
+        return f"""
+        <div class="nav">
+            <div class="nav-content">
+                <div>
+                    <a href="../index.html" class="{('current' if is_group else '')}">Group Analysis</a>
+                    <a href="#" class="{('current' if is_user else '')}">User Analysis</a>
+                </div>
+            </div>
+        </div>
+        """
+
     def export_report(self, report_text: str, figures: list, output_path: str = None):
         """Export report to HTML with embedded figures."""
         # Convert markdown to HTML
         html_content = markdown.markdown(report_text)
 
+        # Determine if this is a group or user report
+        is_group_report = "# Group Analysis Report" in report_text
+        current_page = 'group' if is_group_report else 'user'
+        
         # Create figure HTML
         figure_html = ""
         for fig in figures:
@@ -111,6 +160,9 @@ class HTMLExporter:
                 base64_fig = self._figure_to_base64(fig)
                 figure_html += f'<div class="figure"><img src="data:image/png;base64,{base64_fig}"/></div>'
                 plt.close(fig)  # Close the figure to free memory
+
+        # Generate navigation
+        nav_html = self._generate_nav(current_page)
 
         # Combine everything into HTML document
         html_doc = f"""
@@ -123,6 +175,7 @@ class HTMLExporter:
             {self.style}
         </head>
         <body>
+            {nav_html}
             <div class="container">
                 {html_content}
                 {figure_html}
@@ -134,14 +187,77 @@ class HTMLExporter:
         # Set output path
         if output_path is None:
             os.makedirs('docs', exist_ok=True)
+            os.makedirs('docs/users', exist_ok=True)
             if "# Group Analysis Report" in report_text:
                 output_path = 'docs/index.html'
+            elif "# User Analysis Report" in report_text:
+                # Extract username from the report text - look for the exact format we use
+                lines = report_text.split('\n')
+                username = None
+                for line in lines:
+                    if '## Analysis for @' in line:
+                        username = line.replace('## Analysis for @', '').strip()
+                        break
+                
+                if username:
+                    output_path = f'docs/users/{username}_analysis.html'
+                else:
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    output_path = f'docs/users/user_analysis_{timestamp}.html'
             else:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 output_path = f'docs/report_{timestamp}.html'
 
-        # Save HTML file
+        # Create parent directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # Write the HTML file
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_doc)
 
         return output_path 
+
+    def generate_user_index(self, usernames):
+        """Generate an index page for user analyses."""
+        # Create markdown content
+        content = [
+            "# User Analysis Reports\n",
+            "Click on a user below to view their detailed analysis:\n",
+            "## Available Reports"
+        ]
+        
+        # Add links to each user's report
+        for username in sorted(usernames):
+            content.append(f"- [@{username}]({username}_analysis.html)")
+        
+        # Convert to HTML
+        html_content = markdown.markdown("\n".join(content))
+        
+        # Generate navigation
+        nav_html = self._generate_nav('user')
+        
+        # Create HTML document
+        html_doc = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>User Analysis Reports</title>
+            {self.style}
+        </head>
+        <body>
+            {nav_html}
+            <div class="container">
+                {html_content}
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Create the index file
+        os.makedirs('docs/users', exist_ok=True)
+        with open('docs/users/index.html', 'w', encoding='utf-8') as f:
+            f.write(html_doc)
+        
+        return 'docs/users/index.html' 
