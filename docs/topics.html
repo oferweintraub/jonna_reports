@@ -1,13 +1,113 @@
-
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Topics Analysis</title>
-    <link rel="stylesheet" href="style.css">
+    
+    <style>
+        body {
+            background-color: #1e1e1e;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+        .nav {
+            background-color: #2d2d2d;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid #404040;
+        }
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav a {
+            color: #ffffff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            margin: 0 5px;
+            font-weight: 500;
+        }
+        .nav a:hover {
+            background-color: #404040;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .nav .current {
+            background-color: #404040;
+            font-weight: bold;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            background-color: #2d2d2d;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2, h3, h4 {
+            color: #ffffff;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+        h1 { font-size: 2.2em; }
+        h2 { font-size: 1.8em; }
+        h3 { font-size: 1.5em; }
+        h4 { font-size: 1.3em; }
+        p, ul, ol {
+            margin-bottom: 1em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background-color: #363636;
+            border-radius: 4px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #404040;
+        }
+        th {
+            background-color: #404040;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #404040;
+        }
+        ul {
+            list-style-type: disc;
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 0.5em;
+        }
+    </style>
 </head>
 <body>
-    <div class="content">
-        # Topic Analysis: Pre-War and Post-War Discourse
+    <div class="nav">
+        <div class="nav-content">
+            <div>
+                <a href="/jonna_reports/index.html">📊 Group Analysis</a>
+                <a href="/jonna_reports/users/index.html">👥 User Analysis</a>
+                <a href="/jonna_reports/topics.html" class="current">📝 Topics Analysis</a>
+            </div>
+        </div>
+    </div>
+    <div class="container"># Topic Analysis: Pre-War and Post-War Discourse
 
 ## Overview
 
@@ -104,96 +204,90 @@ as they often reveal emerging trends and subtle shifts in public discourse.
 
 # Discourse Transformation: Pre-War to Post-War Israeli Public Dialogue
 
-## Overview of Topical Shifts
+## Overview of Significant Shifts
 
-### Disappeared/Diminished Topics
-- **Pre-War Focus Areas**:
+### 1. Topic Disappearance
+- **Pre-War Dominant Topics Vanishing**:
   * Judicial Reform Compromise Dynamics
-  * Political Polarization
-  * Media Transformation
-  * Digital Platform Discussions
-  * Legal Expertise Debates
+  * Political Polarization discussions
+  * Media Transformation narratives
+  * Digital Platform discourse
 
-### Emerging Dominant Topics
-- **Post-War Prominent Themes**:
+### 2. Emerging Prominent Topics
+- **New Central Themes**:
   * Military Service and Social Tensions
   * Institutional Accountability
   * Economic Resilience
-  * Geopolitical Security
-  * Civilian Self-Defense
+  * Geopolitical Regional Dynamics
+  * Civilian Self-Defense Strategies
 
 ## Discourse Transformation Patterns
 
-### 1. Shift in Argumentative Tone
-- **Pre-War**: Theoretical, abstract debates about institutional structures
-- **Post-War**: Pragmatic, security-focused discussions with immediate practical implications
+### Argumentative Tone Shifts
+- **Pre-War**: Theoretical, procedural, abstract
+- **Post-War**: Pragmatic, security-focused, immediate
 
-### 2. Power Dynamics Reframing
-- **Pre-War**: Focused on judicial and political power balance
-- **Post-War**: Emphasizing military, economic, and national security power structures
+### Thematic Evolution
 
-### 3. Ideological Repositioning
-- **Pre-War Arguments Centered On**:
-  * Democratic principles
-  * Institutional reform
-  * Media narratives
+#### Security Discourse
+- **Pre-War**: Theoretical national security discussions
+- **Post-War**: Concrete military service, civilian protection narratives
 
-- **Post-War Arguments Prioritize**:
-  * National unity
-  * Collective security
-  * Institutional accountability
-  * Economic resilience
+#### Institutional Critique
+- **Pre-War**: Judicial system structural debates
+- **Post-War**: Comprehensive institutional accountability examination
 
-## Thematic Evolution
+## Psychological and Social Implications
 
-### Judicial Reform Discourse
-- **Pre-War**: Constitutional and theoretical debates
-- **Post-War**: More pragmatic, integrated with national security considerations
+### Collective Narrative Transformation
+- Shift from internal political disagreements to unified national challenge
+- Increased emphasis on collective resilience
+- More pronounced military and security-centric worldview
 
-### Media and Public Communication
-- **Pre-War**: Focused on platform transformation
-- **Post-War**: Emphasizing public broadcasting, information integrity, and national messaging
+## Discourse Power Dynamics
 
-### Social Identity Discussions
-- **Pre-War**: Abstract explorations of national identity
-- **Post-War**: Concrete discussions about military service, collective responsibility
+### Pre-War Characteristics
+- Horizontal political disagreements
+- Intellectual, procedural debates
+- Media-driven narrative construction
 
-## Psychological and Societal Implications
-
-### Discourse Characteristics
-- Increased emphasis on collective experience
-- More security-oriented language
-- Greater focus on immediate practical challenges
-- Reduced theoretical/abstract discussions
-
-### Emotional Tone Shift
-- **Pre-War**: Intellectual, somewhat detached
-- **Post-War**: Urgent, emotionally charged, survival-oriented
+### Post-War Characteristics
+- Vertical solidarity emphasis
+- Practical, survival-oriented discussions
+- Military and security expertise privileged
 
 ## Key Analytical Insights
 
-### Transformation Drivers
-1. Direct military conflict
-2. Shared national trauma
-3. Immediate security imperatives
-4. Economic disruption
+### Discourse Compression
+- Reduced theoretical complexity
+- More direct, action-oriented communication
+- Narrowed acceptable public dialogue range
 
-### Long-Term Potential Implications
-- Potential consolidation of national narrative
-- Increased social cohesion
-- Redefined institutional relationships
-- Accelerated policy adaptation mechanisms
+### Emotional Landscape
+- From theoretical tension to collective trauma response
+- Increased national unity rhetoric
+- Reduced tolerance for internal fragmentation
 
-## Conclusion
+## Quantitative Discourse Indicators
 
-The discourse transformation reflects a profound societal recalibration, moving from theoretical debates to pragmatic, survival-focused dialogue. The shift demonstrates remarkable adaptive capacity in Israeli public communication and collective problem-solving.
+### Popularity Score Transformations
+- **Pre-War Average**: 55.0
+- **Post-War Average**: 65.0
+- Indicates increased engagement and perceived relevance
+
+### Topic Complexity
+- **Pre-War**: More nuanced, multi-dimensional
+- **Post-War**: More binary, security-oriented
+
+## Conclusion: Paradigmatic Shift
+
+The discourse has fundamentally transformed from a horizontally fragmented, procedural dialogue to a vertically integrated, survival-focused narrative, reflecting profound societal recalibration in response to existential challenges.
 
 ## Methodology Note
 
 Topics were extracted using advanced NLP techniques and analyzed for both mainstream and emerging discussions. 
 Special attention was paid to low-popularity topics (below 25% popularity) as they often indicate emerging trends 
 or subtle shifts in public discourse that might become more significant over time. The popularity score reflects 
-the relative prominence of each topic in the analyzed tweets, but importance is not solely determined by popularity.
-    </div>
+the relative prominence of each topic in the analyzed tweets, but importance is not solely determined by popularity.</div>
 </body>
 </html>
