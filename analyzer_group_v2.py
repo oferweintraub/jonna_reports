@@ -44,26 +44,30 @@ class GroupAnalyzer:
 
     def analyze_group(self, pre_df: pd.DataFrame, post_df: pd.DataFrame) -> Dict:
         """Analyze group-level metrics and changes."""
+        results = {}
+        
         # Filter users with at least 30 tweets in each period
         users_pre_30 = set(pre_df[pre_df['total_tweets'] >= 30]['username'])
         users_post_30 = set(post_df[post_df['total_tweets'] >= 30]['username'])
         users_with_30_tweets = users_pre_30.intersection(users_post_30)
         
         # Filter dataframes to only include users with sufficient tweets
-        pre_df = pre_df[pre_df['username'].isin(users_with_30_tweets)]
-        post_df = post_df[post_df['username'].isin(users_with_30_tweets)]
+        pre_df_filtered = pre_df[pre_df['username'].isin(users_with_30_tweets)]
+        post_df_filtered = post_df[post_df['username'].isin(users_with_30_tweets)]
         
-        results = {}
+        # Store filtered dataframes in results
+        results['pre_df'] = pre_df_filtered
+        results['post_df'] = post_df_filtered
         
         # Analyze tweet volumes and changes
-        results['tweet_volumes'] = self._analyze_tweet_volumes(pre_df, post_df)
-        results['toxic_tweets'] = self._analyze_toxic_tweets(pre_df, post_df)
-        results['metrics_changes'] = self._analyze_metrics_changes(pre_df, post_df)
-        results['top_changers'] = self._analyze_top_changers(pre_df, post_df)
-        results['entity_changes'] = self._analyze_entity_changes(pre_df, post_df)
+        results['tweet_volumes'] = self._analyze_tweet_volumes(pre_df_filtered, post_df_filtered)
+        results['toxic_tweets'] = self._analyze_toxic_tweets(pre_df_filtered, post_df_filtered)
+        results['metrics_changes'] = self._analyze_metrics_changes(pre_df_filtered, post_df_filtered)
+        results['top_changers'] = self._analyze_top_changers(pre_df_filtered, post_df_filtered)
+        results['entity_changes'] = self._analyze_entity_changes(pre_df_filtered, post_df_filtered)
         
         # Get narrative analysis which now includes popularity distribution
-        narrative_results = self._analyze_narratives(pre_df, post_df)
+        narrative_results = self._analyze_narratives(pre_df_filtered, post_df_filtered)
         results['narrative_analysis'] = narrative_results
         results['narrative_popularity'] = narrative_results['narrative_popularity']
         
@@ -510,7 +514,15 @@ Return ONLY a valid JSON object with this EXACT format:
         self._plot_volume_changes(ax, results['tweet_volumes'])
         figures.append(fig_volumes)
         
-        # 2. Group Metrics Changes
+        # 2. Overall Toxicity Comparison
+        fig_overall_toxicity = plt.figure(figsize=(15, 10), constrained_layout=True)
+        fig_overall_toxicity.patch.set_facecolor('#1e1e1e')
+        ax = fig_overall_toxicity.add_subplot(111)
+        ax.set_facecolor('#1e1e1e')
+        self._plot_overall_toxicity(ax, results['pre_df'], results['post_df'])
+        figures.append(fig_overall_toxicity)
+        
+        # 3. Group Metrics Changes
         fig_metrics = plt.figure(figsize=(20, 12), constrained_layout=True)
         fig_metrics.patch.set_facecolor('#1e1e1e')
         ax = fig_metrics.add_subplot(111)
@@ -518,7 +530,7 @@ Return ONLY a valid JSON object with this EXACT format:
         self._plot_metrics_changes(ax, results['metrics_changes'])
         figures.append(fig_metrics)
         
-        # 3. Per-Metric Top Changers
+        # 4. Per-Metric Top Changers
         for metric_key, metric_data in results['metrics_changes'].items():
             fig = plt.figure(figsize=(20, 10), constrained_layout=True)
             fig.patch.set_facecolor('#1e1e1e')
@@ -527,7 +539,7 @@ Return ONLY a valid JSON object with this EXACT format:
             self._plot_metric_top_changers(ax, metric_data)
             figures.append(fig)
         
-        # 4. Toxicity Changes
+        # 5. Toxicity Changes
         fig_toxicity = plt.figure(figsize=(20, 10), constrained_layout=True)
         fig_toxicity.patch.set_facecolor('#1e1e1e')
         ax = fig_toxicity.add_subplot(111)
@@ -535,7 +547,7 @@ Return ONLY a valid JSON object with this EXACT format:
         self._plot_toxicity_changes(ax, results['top_changers']['toxicity_top_changers'])
         figures.append(fig_toxicity)
         
-        # 5. Narrative Distribution
+        # 6. Narrative Distribution
         if 'narrative_analysis' in results:
             fig_narratives = plt.figure(figsize=(40, 48))
             fig_narratives.patch.set_facecolor('#1e1e1e')
@@ -561,7 +573,7 @@ Return ONLY a valid JSON object with this EXACT format:
             except Exception as e:
                 plt.close(fig_narratives)
         
-        # 6. User Activity Timeline
+        # 7. User Activity Timeline
         fig_timeline = plt.figure(figsize=(20, 10), constrained_layout=True)
         fig_timeline.patch.set_facecolor('#1e1e1e')
         ax = fig_timeline.add_subplot(111)
@@ -569,7 +581,7 @@ Return ONLY a valid JSON object with this EXACT format:
         self._plot_user_activity_timeline(ax, results['tweet_volumes'])
         figures.append(fig_timeline)
         
-        # 7. Toxicity vs Volume Changes
+        # 8. Toxicity vs Volume Changes
         fig_scatter = plt.figure(figsize=(20, 10), constrained_layout=True)
         fig_scatter.patch.set_facecolor('#1e1e1e')
         ax = fig_scatter.add_subplot(111)
@@ -943,3 +955,40 @@ Return ONLY a valid JSON object with this EXACT format:
         ax.axvline(x=0, color='white', linestyle='--', alpha=0.3)
         
         ax.tick_params(colors='white', labelsize=24) 
+
+    def _plot_overall_toxicity(self, ax, pre_df: pd.DataFrame, post_df: pd.DataFrame):
+        """Plot overall toxicity comparison between pre and post war periods."""
+        # Calculate average toxicity for each period
+        pre_toxicity = pre_df['toxicity_level'].mean()
+        post_toxicity = post_df['toxicity_level'].mean()
+        
+        # Create bars
+        periods = ['Pre-war', 'Post-war']
+        toxicity_levels = [pre_toxicity, post_toxicity]
+        
+        bars = ax.bar(periods, toxicity_levels, width=0.6)
+        
+        # Color bars
+        bars[0].set_color('#3498db')  # Blue for pre-war
+        bars[1].set_color('#e74c3c')  # Red for post-war
+        
+        # Customize plot
+        ax.set_title('Overall Toxicity Comparison', fontsize=32, color='white', pad=20)
+        ax.set_ylabel('Average Toxicity Level', fontsize=28, color='white')
+        ax.grid(True, alpha=0.3)
+        
+        # Style improvements
+        ax.set_facecolor('#1e1e1e')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(colors='white', labelsize=24)
+        
+        # Add value labels
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{height:.2f}',
+                   ha='center', va='bottom',
+                   color='white', fontsize=24) 
