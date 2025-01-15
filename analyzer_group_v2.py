@@ -59,6 +59,12 @@ class GroupAnalyzer:
         results['pre_df'] = pre_df_filtered
         results['post_df'] = post_df_filtered
         
+        # Add emotional tone analysis
+        results['emotional_tones'] = {
+            'pre_war': self._get_emotion_distribution(pre_df_filtered),
+            'post_war': self._get_emotion_distribution(post_df_filtered)
+        }
+        
         # Analyze tweet volumes and changes
         results['tweet_volumes'] = self._analyze_tweet_volumes(pre_df_filtered, post_df_filtered)
         results['toxic_tweets'] = self._analyze_toxic_tweets(pre_df_filtered, post_df_filtered)
@@ -506,29 +512,67 @@ Return ONLY a valid JSON object with this EXACT format:
             'legend.fontsize': 24
         })
         
-        # 1. Tweet Volume Changes
+        # 1. Emotional Tone Comparison
+        fig_emotions = plt.figure(figsize=(20, 10))
+        fig_emotions.patch.set_facecolor('#1e1e1e')
+        ax = fig_emotions.add_subplot(111)
+        ax.set_facecolor('#1e1e1e')
+        
+        # Get all unique emotions
+        all_emotions = sorted(set(results['emotional_tones']['pre_war'].keys()) | 
+                            set(results['emotional_tones']['post_war'].keys()))
+        
+        # Prepare data for plotting
+        x = np.arange(len(all_emotions))
+        width = 0.35
+        
+        # Create bars
+        pre_values = [results['emotional_tones']['pre_war'].get(emotion, 0) for emotion in all_emotions]
+        post_values = [results['emotional_tones']['post_war'].get(emotion, 0) for emotion in all_emotions]
+        
+        bars1 = ax.bar(x - width/2, pre_values, width, label='Pre-war', color='#3498db', alpha=0.8)
+        bars2 = ax.bar(x + width/2, post_values, width, label='Post-war', color='#e74c3c', alpha=0.8)
+        
+        # Customize plot
+        ax.set_title('Emotional Tone Distribution', pad=20)
+        ax.set_xlabel('Emotions')
+        ax.set_ylabel('Percentage of Tweets')
+        ax.set_xticks(x)
+        ax.set_xticklabels(all_emotions, rotation=45, ha='right')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        
+        # Add value labels
+        def autolabel(bars):
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{height:.1f}%',
+                       ha='center', va='bottom',
+                       color='white', fontsize=20)
+        
+        autolabel(bars1)
+        autolabel(bars2)
+        
+        # Adjust layout to prevent label cutoff
+        plt.tight_layout()
+        figures.append(fig_emotions)
+        
+        # 2. Overall Toxicity Comparison
+        fig_toxicity = plt.figure(figsize=(15, 10), constrained_layout=True)
+        fig_toxicity.patch.set_facecolor('#1e1e1e')
+        ax = fig_toxicity.add_subplot(111)
+        ax.set_facecolor('#1e1e1e')
+        self._plot_overall_toxicity(ax, results['pre_df'], results['post_df'])
+        figures.append(fig_toxicity)
+        
+        # 3. Tweet Volume Changes
         fig_volumes = plt.figure(figsize=(20, 10), constrained_layout=True)
         fig_volumes.patch.set_facecolor('#1e1e1e')
         ax = fig_volumes.add_subplot(111)
         ax.set_facecolor('#1e1e1e')
         self._plot_volume_changes(ax, results['tweet_volumes'])
         figures.append(fig_volumes)
-        
-        # 2. Overall Toxicity Comparison
-        fig_overall_toxicity = plt.figure(figsize=(15, 10), constrained_layout=True)
-        fig_overall_toxicity.patch.set_facecolor('#1e1e1e')
-        ax = fig_overall_toxicity.add_subplot(111)
-        ax.set_facecolor('#1e1e1e')
-        self._plot_overall_toxicity(ax, results['pre_df'], results['post_df'])
-        figures.append(fig_overall_toxicity)
-        
-        # 3. Group Metrics Changes
-        fig_metrics = plt.figure(figsize=(20, 12), constrained_layout=True)
-        fig_metrics.patch.set_facecolor('#1e1e1e')
-        ax = fig_metrics.add_subplot(111)
-        ax.set_facecolor('#1e1e1e')
-        self._plot_metrics_changes(ax, results['metrics_changes'])
-        figures.append(fig_metrics)
         
         # 4. Per-Metric Top Changers
         for metric_key, metric_data in results['metrics_changes'].items():
@@ -674,10 +718,55 @@ Return ONLY a valid JSON object with this EXACT format:
             "**Analysis Periods:**",
             "- Pre-war: July 9, 2023 - October 7, 2023 (90 days before the war)",
             "- Post-war: October 1, 2024 - December 30, 2024 (90 days at end of 2024)\n",
-            "## Overall Statistics\n"
         ])
         
-        # 2. Tweet Volumes with percentage change
+        # 2. Emotional Tone Analysis
+        report_sections.extend([
+            "## Emotional Tone Analysis\n",
+            "### Pre-war Period Emotions:",
+            *[f"- {emotion}: {pct:.1f}%" for emotion, pct in results['emotional_tones']['pre_war'].items()],
+            "\n### Post-war Period Emotions:",
+            *[f"- {emotion}: {pct:.1f}%" for emotion, pct in results['emotional_tones']['post_war'].items()],
+            "\n### Key Emotional Changes:",
+        ])
+        
+        # Calculate and display significant emotional changes
+        all_emotions = set(results['emotional_tones']['pre_war'].keys()) | set(results['emotional_tones']['post_war'].keys())
+        significant_changes = []
+        
+        for emotion in all_emotions:
+            pre_pct = results['emotional_tones']['pre_war'].get(emotion, 0)
+            post_pct = results['emotional_tones']['post_war'].get(emotion, 0)
+            change = post_pct - pre_pct
+            if abs(change) >= 5:  # Only show changes of 5% or more
+                significant_changes.append((emotion, change))
+        
+        # Sort by absolute change magnitude
+        significant_changes.sort(key=lambda x: abs(x[1]), reverse=True)
+        
+        # Add significant changes to report
+        for emotion, change in significant_changes:
+            direction = "increased" if change > 0 else "decreased"
+            report_sections.append(f"- {emotion} {direction} by {abs(change):.1f}%")
+        
+        report_sections.append("\n")  # Add spacing before next section
+        
+        # 3. Toxicity Analysis
+        report_sections.extend([
+            "### Toxicity Analysis\n",
+            f"**Pre-war Average Toxicity:** {results['pre_df']['toxicity_level'].mean():.2f}",
+            f"**Post-war Average Toxicity:** {results['post_df']['toxicity_level'].mean():.2f}",
+            "\n**Most Toxic Tweets:**",
+            "\nPre-war Period:",
+            *[f"- <span style='color: #3498DB'>@{tweet['username']}</span> (toxicity: {tweet['toxicity']:.1f}):\n  ```\n  {tweet['tweet']}\n  ```"
+              for tweet in results['toxic_tweets']['pre_war_toxic']],
+            "\nPost-war Period:",
+            *[f"- <span style='color: #3498DB'>@{tweet['username']}</span> (toxicity: {tweet['toxicity']:.1f}):\n  ```\n  {tweet['tweet']}\n  ```"
+              for tweet in results['toxic_tweets']['post_war_toxic']],
+            "\n"
+        ])
+        
+        # 4. Tweet Volumes with percentage change
         volumes = results['tweet_volumes']
         pct_change = ((volumes['post_war_total'] - volumes['pre_war_total']) / volumes['pre_war_total'] * 100)
         report_sections.extend([
@@ -690,20 +779,7 @@ Return ONLY a valid JSON object with this EXACT format:
             "\n"
         ])
         
-        # 3. Toxic Tweets
-        toxic = results['toxic_tweets']
-        report_sections.extend([
-            "### Most Toxic Tweets\n",
-            "Pre-war Period:",
-            *[f"- <span style='color: #3498DB'>@{tweet['username']}</span> (toxicity: {tweet['toxicity']:.1f}):\n  ```\n  {tweet['tweet']}\n  ```"
-              for tweet in toxic['pre_war_toxic']],
-            "\nPost-war Period:",
-            *[f"- <span style='color: #3498DB'>@{tweet['username']}</span> (toxicity: {tweet['toxicity']:.1f}):\n  ```\n  {tweet['tweet']}\n  ```"
-              for tweet in toxic['post_war_toxic']],
-            "\n"
-        ])
-        
-        # 4. Metrics Analysis
+        # 5. Metrics Analysis
         report_sections.append("### Metrics Analysis\n")
         for metric_key, metric_data in results['metrics_changes'].items():
             report_sections.extend([
@@ -741,7 +817,24 @@ Return ONLY a valid JSON object with this EXACT format:
                 f"\n**Evolution Analysis:** {narrative_data.get('analysis', '')}\n"
             ])
         
-        return "\n".join(report_sections), results['figures'] 
+        return "\n".join(report_sections), results['figures']
+        
+    def _get_emotion_distribution(self, df: pd.DataFrame) -> Dict[str, float]:
+        """Calculate the distribution of emotions in a DataFrame."""
+        all_emotions = []
+        for emotions in df['emotional_tones']:
+            try:
+                emotions_list = eval(emotions)
+                all_emotions.extend(emotions_list)
+            except:
+                continue
+        
+        if not all_emotions:
+            return {}
+            
+        emotion_counts = Counter(all_emotions)
+        total = len(all_emotions)
+        return {emotion: (count/total)*100 for emotion, count in emotion_counts.most_common()}
 
     def _plot_toxicity_changes(self, ax, toxicity_data: List[Dict]):
         """Plot toxicity changes."""
@@ -992,3 +1085,50 @@ Return ONLY a valid JSON object with this EXACT format:
                    f'{height:.2f}',
                    ha='center', va='bottom',
                    color='white', fontsize=24) 
+
+    def _plot_emotion_comparison(self, ax, pre_df: pd.DataFrame, post_df: pd.DataFrame):
+        """Plot emotional tone comparison between pre and post war periods."""
+        pre_emotions = self._get_emotion_distribution(pre_df)
+        post_emotions = self._get_emotion_distribution(post_df)
+        
+        # Get all unique emotions
+        all_emotions = sorted(set(pre_emotions.keys()) | set(post_emotions.keys()))
+        
+        # Prepare data for plotting
+        x = np.arange(len(all_emotions))
+        width = 0.35
+        
+        # Create bars
+        pre_values = [pre_emotions.get(emotion, 0) for emotion in all_emotions]
+        post_values = [post_emotions.get(emotion, 0) for emotion in all_emotions]
+        
+        bars1 = ax.bar(x - width/2, pre_values, width, label='Pre-war', color='#3498db', alpha=0.8)
+        bars2 = ax.bar(x + width/2, post_values, width, label='Post-war', color='#e74c3c', alpha=0.8)
+        
+        # Customize plot
+        ax.set_title('Emotional Tone Distribution', fontsize=32, color='white', pad=20)
+        ax.set_xlabel('Emotions', fontsize=28, color='white')
+        ax.set_ylabel('Percentage of Tweets', fontsize=28, color='white')
+        ax.set_xticks(x)
+        ax.set_xticklabels(all_emotions, rotation=45, ha='right')
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=24, facecolor='#1e1e1e', labelcolor='white')
+        
+        # Style improvements
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(colors='white')
+        
+        # Add value labels
+        def autolabel(bars):
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{height:.1f}%',
+                       ha='center', va='bottom',
+                       color='white', fontsize=20)
+        
+        autolabel(bars1)
+        autolabel(bars2) 
